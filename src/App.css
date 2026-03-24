@@ -1,38 +1,71 @@
-.App {
-  text-align: center;
+/* ── AutomationEdge AI Tools – Global Styles ─────────────────────────────── */
+
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap");
+
+/* ── CSS Variables ─────────────────────────────────────────────────────────── */
+:root {
+  /* Brand colors extracted from automationedge.com */
+  --ae-navy: #0a1628;
+  --ae-navy-mid: #112240;
+  --ae-navy-light: #1a3460;
+  --ae-orange: #f26522;
+  --ae-orange-light: #ff7d35;
+  --ae-orange-glow: rgba(242, 101, 34, 0.18);
+  --ae-white: #ffffff;
+  --ae-text-primary: #e8edf5;
+  --ae-text-secondary: #8fa3c0;
+  --ae-text-muted: #506280;
+  --ae-border: rgba(255, 255, 255, 0.07);
+  --ae-border-active: rgba(242, 101, 34, 0.45);
+  --ae-surface: rgba(255, 255, 255, 0.04);
+  --ae-surface-hover: rgba(255, 255, 255, 0.07);
+  --ae-glass: rgba(17, 34, 64, 0.72);
+  --sidebar-width: 268px;
+  --sidebar-collapsed: 68px;
+  --topbar-height: 56px;
+  --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  --radius: 12px;
+  --radius-sm: 8px;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+/* ── Reset ─────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  font-family: "DM Sans", sans-serif;
+  background: var(--ae-navy);
+  color: var(--ae-text-primary);
+  overflow: hidden;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+/* ── App Shell ─────────────────────────────────────────────────────────────── */
+.app-root {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 10%, rgba(242, 101, 34, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 50% at 85% 90%, rgba(17, 34, 64, 0.8) 0%, transparent 60%),
+    var(--ae-navy);
 }
 
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.main-content {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  overflow: hidden;
+  margin-left: var(--sidebar-width);
+  transition: margin-left var(--transition);
 }
 
-.App-link {
-  color: #61dafb;
+.main-content.expanded {
+  margin-left: var(--sidebar-collapsed);
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--ae-navy-light); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ae-orange); }

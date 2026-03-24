@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% if is_settings %}Settings{% else %}Setup{% endif %} — GEMS</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+       background: #f4f5f7; min-height: 100vh; padding: 40px 16px; color: #111827; }
+.wrap { max-width: 620px; margin: 0 auto; }
+
+.logo { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
+.logo-icon { width: 40px; height: 40px; border-radius: 10px; background: #25d366;
+             display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.logo h1 { font-size: 20px; font-weight: 700; }
+.logo p  { font-size: 13px; color: #6b7280; }
+
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+        padding: 24px; margin-bottom: 16px; }
+.card h2 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.card .desc { font-size: 12px; color: #6b7280; margin-bottom: 18px; }
+
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 5px; }
+.field .hint  { font-size: 11px; color: #9ca3af; margin-top: 3px; }
+input[type="text"] {
+  width: 100%; padding: 9px 12px; border: 1px solid #d1d5db;
+  border-radius: 8px; font-size: 13px;
+  font-family: "Cascadia Code", monospace; background: #fafafa; outline: none;
+}
+input[type="text"]:focus { border-color: #25d366; background: #fff; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 24px;
+       border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer;
+       border: none; background: #25d366; color: #fff; }
+.btn:hover { background: #128c7e; }
+
+.toast { background: #d1fae5; border: 1px solid #6ee7b7; border-radius: 8px;
+         padding: 10px 14px; font-size: 13px; color: #065f46; margin-bottom: 14px; }
+.back { font-size: 13px; color: #25d366; text-decoration: none; display: inline-block; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <h1>GEMS Automation</h1>
+      <p>{% if is_settings %}Update configuration{% else %}First-time setup{% endif %}</p>
+    </div>
+  </div>
+
+  {% if saved %}<div class="toast">✅ Settings saved.</div>{% endif %}
+  {% if is_settings %}<a href="/" class="back">← Back to chat</a>{% endif %}
+
+  <form method="POST">
+    <div class="card">
+      <h2>Vertex AI</h2>
+      <p class="desc">Same values as KEY_PATH, PROJECT_ID in your VertexAI.py</p>
+      <div class="field">
+        <label>Service account JSON path</label>
+        <input type="text" name="service_account_path" value="{{ current.service_account_path if current else '' }}"
+               placeholder="D:\AiStudio\Demo Projects\AI_KM\Gems\service-account.json">
+      </div>
+      <div class="field">
+        <label>Project ID</label>
+        <input type="text" name="project_id" value="{{ current.project_id if current else '' }}"
+               placeholder="speech-to-text-397408">
+      </div>
+      <div class="field">
+        <label>Location</label>
+        <input type="text" name="vertex_location" value="{{ current.vertex_location if current else 'us-central1' }}">
+      </div>
+      <div class="field">
+        <label>Model</label>
+        <input type="text" name="vertex_model" value="{{ current.vertex_model if current else 'gemini-2.0-flash' }}">
+      </div>
+      <div class="field">
+        <label>Python libs path (optional — your D:\pylibs override)</label>
+        <input type="text" name="pylibs_path" value="{{ current.pylibs_path if current else '' }}" placeholder="D:\pylibs">
+        <p class="hint">Leave blank if not needed</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Knowledge base</h2>
+      <p class="desc">Same as KB_FOLDER and SYSTEM_PROMPT_PATH in your VertexAI.py</p>
+      <div class="field">
+        <label>KB files folder</label>
+        <input type="text" name="kb_folder" value="{{ current.kb_folder if current else '' }}"
+               placeholder="D:\AiStudio\Demo Projects\AI_KM\Gems\KB Files">
+      </div>
+      <div class="field">
+        <label>System prompt file (AiStudio_SP_V3.txt)</label>
+        <input type="text" name="system_prompt_path" value="{{ current.system_prompt_path if current else '' }}"
+               placeholder="D:\AiStudio\Demo Projects\AI_KM\Gems\AiStudio_SP_V3.txt">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Output directories</h2>
+      <p class="desc">Where each generated file is saved. Python files are saved directly here as {usecase}_{filename}.py</p>
+      <div class="field">
+        <label>Scripts directory</label>
+        <input type="text" name="scripts_dir" value="{{ current.scripts_dir if current else '' }}"
+               placeholder="D:\AiStudio\aistudio-package\addon\demo\cognibot\scripts">
+        <p class="hint">Python scripts saved as {usecase}_{filename}.py directly in this folder</p>
+      </div>
+      <div class="field">
+        <label>Card helper directory</label>
+        <input type="text" name="card_helper_dir" value="{{ current.card_helper_dir if current else '' }}"
+               placeholder="D:\AiStudio\...\custom\card_helper">
+      </div>
+      <div class="field">
+        <label>Templates directory</label>
+        <input type="text" name="templates_dir" value="{{ current.templates_dir if current else '' }}"
+               placeholder="D:\AiStudio\...\custom\templates">
+      </div>
+      <div class="field">
+        <label>Hooks directory</label>
+        <input type="text" name="hooks_dir" value="{{ current.hooks_dir if current else '' }}"
+               placeholder="D:\AiStudio\...\custom\hooks">
+        <p class="hint">custom_hook.py saved here; existing file is backed up automatically</p>
+      </div>
+    </div>
+
+    <button type="submit" class="btn">
+      {% if is_settings %}💾 Save settings{% else %}✅ Save & get started{% endif %}
+    </button>
+  </form>
+</div>
+</body>
+</html>

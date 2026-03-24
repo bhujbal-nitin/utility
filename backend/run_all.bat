@@ -1,0 +1,19 @@
+@echo off
+echo Starting Edge Assistant Microservices...
+
+echo Starting Auth Service on port 8000...
+start cmd /k ".\venv\Scripts\activate & uvicorn auth_service.main:app --port 8000 --reload"
+
+echo Starting BRD Service on port 8001...
+start cmd /k ".\venv\Scripts\activate & uvicorn brd_service.main:app --port 8001 --reload"
+
+echo Starting Proposal Service on port 8002...
+start cmd /k ".\venv\Scripts\activate & uvicorn proposal_service.main:app --port 8002 --reload"
+
+echo Starting Automation Studio Service on port 8003...
+start cmd /k ".\venv\Scripts\activate & uvicorn automation_service.main:app --port 8003 --reload"
+
+echo Starting AE Migration Service on port 8004...
+start cmd /k ".\venv\Scripts\activate & uvicorn migration_service.main:app --port 8004 --reload"
+
+echo All services started in separate windows!

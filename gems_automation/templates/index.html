@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GEMS Automation</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #f0f2f5;
+  --sidebar:   #ffffff;
+  --chat-bg:   #efeae2;
+  --bubble-u:  #dcf8c6;
+  --bubble-a:  #ffffff;
+  --accent:    #25d366;
+  --accent2:   #128c7e;
+  --text:      #111b21;
+  --muted:     #667781;
+  --border:    #e9edef;
+  --artifact:  #e3f2fd;
+  --art-border:#90caf9;
+}
+
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+       background: var(--bg); color: var(--text); height: 100vh;
+       display: flex; overflow: hidden; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 340px; min-width: 280px; background: var(--sidebar);
+  border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+.sidebar-header {
+  padding: 14px 16px; background: #f0f2f5;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sidebar-header h1 { font-size: 18px; font-weight: 700; color: var(--accent2); }
+.sidebar-header a  { font-size: 12px; color: var(--muted); text-decoration: none; }
+.sidebar-header a:hover { color: var(--accent2); }
+
+.new-chat-btn {
+  margin: 12px; padding: 10px 0; border-radius: 8px;
+  background: var(--accent); color: #fff; font-size: 14px;
+  font-weight: 700; border: none; cursor: pointer; width: calc(100% - 24px);
+  transition: background .15s;
+}
+.new-chat-btn:hover { background: var(--accent2); }
+
+.session-list { flex: 1; overflow-y: auto; }
+.session-item {
+  padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.session-item:hover, .session-item.active { background: #f0f2f5; }
+.session-item .s-name  { font-size: 14px; font-weight: 600; color: var(--text); }
+.session-item .s-date  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.session-item .s-tok   { font-size: 11px; color: var(--accent2); margin-top: 3px; }
+.session-item .s-badge { display: inline-block; background: var(--accent);
+                          color: #fff; font-size: 10px; font-weight: 700;
+                          padding: 1px 6px; border-radius: 99px; margin-top: 3px; }
+.no-history { padding: 24px 16px; font-size: 13px; color: var(--muted); text-align: center; }
+
+/* ── Main chat area ── */
+.chat-area {
+  flex: 1; display: flex; flex-direction: column;
+  background: var(--chat-bg); min-width: 0;
+}
+
+.chat-header {
+  padding: 12px 16px; background: #f0f2f5;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+}
+.chat-header .avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--accent2); display: flex; align-items: center;
+  justify-content: center; font-size: 18px; color: #fff; flex-shrink: 0;
+}
+.chat-header .info { flex: 1; }
+.chat-header .info .cname { font-size: 15px; font-weight: 700; }
+.chat-header .info .csub  { font-size: 12px; color: var(--muted); }
+.chat-header .tok-summary  { font-size: 11px; color: var(--muted); text-align: right; line-height: 1.6; }
+
+/* ── Start screen ── */
+.start-screen {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px; padding: 32px;
+}
+.start-screen .logo { font-size: 48px; }
+.start-screen h2 { font-size: 20px; font-weight: 700; color: var(--accent2); }
+.start-screen p  { font-size: 14px; color: var(--muted); text-align: center; max-width: 400px; }
+.start-form { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 420px; }
+.start-form input {
+  padding: 11px 14px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 14px; outline: none;
+}
+.start-form input:focus { border-color: var(--accent); }
+.start-form button {
+  padding: 11px; background: var(--accent); color: #fff;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
+  cursor: pointer;
+}
+.start-form button:hover { background: var(--accent2); }
+
+/* ── Messages ── */
+.messages { flex: 1; overflow-y: auto; padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; }
+
+.msg-row { display: flex; }
+.msg-row.user { justify-content: flex-end; }
+.msg-row.assistant, .msg-row.system { justify-content: flex-start; }
+
+.bubble {
+  max-width: 72%; padding: 8px 12px; border-radius: 8px;
+  font-size: 14px; line-height: 1.5; word-break: break-word;
+  position: relative;
+}
+.msg-row.user      .bubble { background: var(--bubble-u); border-top-right-radius: 2px; }
+.msg-row.assistant .bubble { background: var(--bubble-a); border-top-left-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.msg-row.system    .bubble {
+  background: rgba(0,0,0,.05); font-size: 12px; color: var(--muted);
+  padding: 4px 10px; border-radius: 99px; max-width: 100%; text-align: center;
+}
+
+.bubble .ts { font-size: 10px; color: var(--muted); text-align: right; margin-top: 4px; }
+
+/* Typing indicator */
+.typing-dots { display: flex; gap: 4px; padding: 4px 0; }
+.typing-dots span {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+  animation: bounce .9s infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: .15s; }
+.typing-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+/* Artifact card inside bubble */
+.artifact-card {
+  background: var(--artifact); border: 1px solid var(--art-border);
+  border-radius: 8px; padding: 10px 12px; margin-top: 8px;
+  font-size: 13px;
+}
+.artifact-card .af-title { font-weight: 700; color: #1565c0; margin-bottom: 4px; }
+.artifact-card .af-path  { font-family: monospace; font-size: 11.5px; color: #374151;
+                             word-break: break-all; }
+.artifact-card .af-dl    { display: inline-block; margin-top: 6px; padding: 4px 10px;
+                             background: #1565c0; color: #fff; border-radius: 6px;
+                             font-size: 12px; font-weight: 700; text-decoration: none; }
+.artifact-card .af-dl:hover { background: #0d47a1; }
+
+.asking-badge {
+  margin-top: 10px; padding: 7px 10px;
+  background: #fff3cd; border: 1px solid #ffc107;
+  border-radius: 6px; font-size: 12px; font-weight: 600;
+  color: #856404;
+}
+
+/* ── Input area ── */
+.input-area {
+  background: #f0f2f5; border-top: 1px solid var(--border);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
+}
+
+/* Attachment preview */
+.attach-preview {
+  background: #fff; border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; font-size: 12px; color: var(--muted);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.attach-preview .rm { cursor: pointer; color: #e53935; font-weight: 700; padding: 0 4px; }
+
+/* Not-working panel */
+.fix-panel {
+  background: #fff3e0; border: 1px solid #ffb74d; border-radius: 8px;
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;
+}
+.fix-panel label { font-size: 12px; font-weight: 700; color: #e65100; }
+.fix-panel textarea {
+  border: 1px solid #ffb74d; border-radius: 6px; padding: 6px 8px;
+  font-size: 13px; font-family: inherit; resize: none; outline: none; min-height: 60px;
+}
+.fix-panel .fix-actions { display: flex; gap: 6px; }
+.fix-panel .fix-actions button {
+  padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 700;
+  cursor: pointer; border: none;
+}
+.btn-send-fix { background: #e65100; color: #fff; }
+.btn-send-fix:hover { background: #bf360c; }
+.btn-cancel-fix { background: #eee; color: #555; }
+
+/* Main input row */
+.input-row { display: flex; align-items: flex-end; gap: 8px; }
+
+.attach-btn {
+  width: 40px; height: 40px; border-radius: 50%; background: transparent;
+  border: none; cursor: pointer; font-size: 20px; color: var(--muted);
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  transition: color .15s;
+}
+.attach-btn:hover { color: var(--accent2); }
+
+.msg-input {
+  flex: 1; border: none; border-radius: 20px; padding: 10px 16px;
+  font-size: 14px; font-family: inherit; outline: none; resize: none;
+  max-height: 120px; line-height: 1.4; background: #fff;
+}
+
+.not-working-btn {
+  padding: 8px 12px; border-radius: 20px; border: 1px solid #ffb74d;
+  background: #fff3e0; color: #e65100; font-size: 12px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.not-working-btn:hover { background: #ffe0b2; }
+
+.send-btn {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--accent); color: #fff; border: none;
+  cursor: pointer; font-size: 18px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.send-btn:hover:not(:disabled) { background: var(--accent2); }
+.send-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+input[type="file"] { display: none; }
+
+/* ── History panel overlay ── */
+.hist-modal-bg {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.hist-modal {
+  background: #fff; border-radius: 12px; width: 700px; max-width: 95vw;
+  max-height: 85vh; display: flex; flex-direction: column; overflow: hidden;
+}
+.hist-modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.hist-modal-header h2 { font-size: 16px; font-weight: 700; }
+.hist-modal-header button { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
+.hist-body { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.hist-entry {
+  border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+}
+.hist-entry .he-name  { font-size: 15px; font-weight: 700; }
+.hist-entry .he-date  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.hist-entry .he-tokens {
+  display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap;
+}
+.tok-pill {
+  padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 700;
+  background: #e8f5e9; color: #1b5e20;
+}
+.tok-pill.out { background: #e3f2fd; color: #0d47a1; }
+.tok-pill.tot { background: #fce4ec; color: #880e4f; }
+.he-files { margin-top: 8px; }
+.he-files .hf { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.he-files .hf b { color: var(--text); }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <h1>⚡ GEMS</h1>
+    <a href="/settings">⚙️ Settings</a>
+  </div>
+  <button class="new-chat-btn" onclick="showStart()">+ New chatbot</button>
+  <div class="session-list" id="session-list">
+    <div class="no-history">No sessions yet</div>
+  </div>
+</div>
+
+<!-- ── Main area ── -->
+<div class="chat-area" id="chat-area">
+
+  <!-- Start screen -->
+  <div class="start-screen" id="start-screen">
+    <div class="logo">⚡</div>
+    <h2>GEMS Automation Pipeline</h2>
+    <p>Start a new chatbot session. Describe your flow and I'll generate dialogs, Python functions, WhatsApp flows and hooks — one step at a time.</p>
+    <div class="start-form">
+      <input type="text" id="start-usecase" placeholder="Usecase name (e.g. room_booking)" maxlength="60">
+      <button onclick="startSession()">Start session</button>
+    </div>
+  </div>
+
+  <!-- Chat screen (hidden until session starts) -->
+  <div class="hidden" id="chat-screen" style="flex:1;display:flex;flex-direction:column;min-height:0">
+
+    <div class="chat-header">
+      <div class="avatar">🤖</div>
+      <div class="info">
+        <div class="cname" id="hdr-usecase">—</div>
+        <div class="csub">Vertex AI · gemini-2.0-flash</div>
+      </div>
+      <div class="tok-summary" id="tok-summary"></div>
+    </div>
+
+    <div class="messages" id="messages"></div>
+
+    <!-- Input area -->
+    <div class="input-area">
+
+      <!-- Attachment preview -->
+      <div class="attach-preview hidden" id="attach-preview">
+        <span id="attach-name">📎 No file</span>
+        <span class="rm" onclick="clearAttach()">✕</span>
+      </div>
+
+      <!-- Not-working panel -->
+      <div class="fix-panel hidden" id="fix-panel">
+        <label>🔴 Describe the error or issue with the dialogs:</label>
+        <textarea id="fix-desc" placeholder="e.g. Missing keys on action element, canvas not rendering, trigger regex error …" rows="3"></textarea>
+        <div class="fix-actions">
+          <button class="btn-send-fix" onclick="sendFix()">Send for correction</button>
+          <button class="btn-cancel-fix" onclick="closeFix()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Main input row -->
+      <div class="input-row">
+        <button class="attach-btn" onclick="document.getElementById('file-input').click()" title="Attach document">📎</button>
+        <input type="file" id="file-input" accept=".txt,.pdf,.docx,.md" onchange="handleFile(this)">
+        <textarea class="msg-input" id="msg-input" placeholder="Describe the chatbot flow, or say: generate Python function, generate hooks …"
+                  rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="not-working-btn" onclick="toggleFix()" title="Dialogs not importing correctly?">⚠️ Not working</button>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">➤</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── History modal ── -->
+<div class="hist-modal-bg hidden" id="hist-modal" onclick="closeHistory(event)">
+  <div class="hist-modal">
+    <div class="hist-modal-header">
+      <h2>📋 Session history</h2>
+      <button onclick="document.getElementById('hist-modal').classList.add('hidden')">✕</button>
+    </div>
+    <div class="hist-body" id="hist-body"></div>
+  </div>
+</div>
+
+<script>
+/* ─── State ─────────────────────────────────────────────────────────────────── */
+let sessionId    = null;
+let usecaseName  = '';
+let isFirstMsg   = false;
+let isBusy       = false;
+let attachText   = '';
+let attachFname  = '';
+let tokens       = { prompt: 0, candidates: 0, total: 0 };
+
+/* ─── Helpers ────────────────────────────────────────────────────────────────── */
+function now() {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function nl2br(s) {
+  // Convert code blocks to <pre>, rest to escaped text with line breaks
+  return esc(s).replace(/```[\w]*\n?/g,'<pre style="background:#f4f5f7;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px;margin-top:6px">').replace(/```/g,'</pre>').replace(/\n/g,'<br>');
+}
+function fmtNum(n) { return (n||0).toLocaleString(); }
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+/* ─── UI navigation ──────────────────────────────────────────────────────────── */
+function showStart() {
+  document.getElementById('start-screen').classList.remove('hidden');
+  document.getElementById('chat-screen').classList.add('hidden');
+  document.getElementById('start-usecase').value = '';
+  document.querySelectorAll('.session-item').forEach(e => e.classList.remove('active'));
+  sessionId = null; usecaseName = ''; tokens = {prompt:0,candidates:0,total:0};
+}
+
+function showChat(sid, uname) {
+  sessionId   = sid;
+  usecaseName = uname;
+  document.getElementById('start-screen').classList.add('hidden');
+  const cs = document.getElementById('chat-screen');
+  cs.classList.remove('hidden');
+  cs.style.display = 'flex';
+  document.getElementById('hdr-usecase').textContent = uname;
+  updateTokSummary();
+}
+
+/* ─── Session start ──────────────────────────────────────────────────────────── */
+async function startSession() {
+  const name = document.getElementById('start-usecase').value.trim();
+  if (!name) { alert('Enter a usecase name.'); return; }
+
+  try {
+    const res  = await fetch('/api/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usecase_name: name }),
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+
+    showChat(data.session_id, data.usecase_name);
+    document.getElementById('messages').innerHTML = '';
+    tokens = {prompt:0,candidates:0,total:0};
+    isFirstMsg = true;
+
+    addSystemMsg('Session started. Describe the chatbot flow or upload a requirements document to begin.');
+    refreshSidebar();
+  } catch(e) { alert('Could not start session: ' + e); }
+}
+
+/* ─── Messaging ──────────────────────────────────────────────────────────────── */
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+async function sendMessage() {
+  if (isBusy || !sessionId) return;
+  const input = document.getElementById('msg-input');
+  const text  = input.value.trim();
+  if (!text) return;
+
+  input.value = ''; autoResize(input);
+  addUserBubble(text, attachFname || null);
+
+  const att = attachText;
+  clearAttach();
+  await dispatch(text, att);
+}
+
+async function sendFix() {
+  if (isBusy || !sessionId) return;
+  const desc = document.getElementById('fix-desc').value.trim();
+  const fixMsg = desc
+    ? `The dialogs.json is NOT working when importing into AI Studio.\n\nError / issue described by user:\n${desc}\n\nPlease carefully review the dialogs.json you generated, find the problem, and return a fully corrected version.`
+    : `The dialogs.json is NOT working when importing into AI Studio. Please carefully review it against the schema reference and correct all issues. Return only the corrected dialogs.json as a valid JSON code block.`;
+
+  closeFix();
+  addUserBubble('⚠️ Not working: ' + (desc || '(no description provided)'));
+  await dispatch(fixMsg);
+}
+
+async function dispatch(userText, attachmentText = '') {
+  setBusy(true);
+  const typingId = addTypingIndicator();
+
+  const q = new EventSource('/api/chat?' + new URLSearchParams());
+  // Use fetch+SSE instead
+  q.close();
+
+  try {
+    const response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id:      sessionId,
+        usecase_name:    usecaseName,
+        message:         userText,
+        is_first:        isFirstMsg,
+        attachment_text: attachmentText || '',
+      }),
+    });
+
+    isFirstMsg = false;
+
+    const reader  = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let assistantText = '';
+    const artifactInfos = [];
+    let isAskingFlag = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        let msg;
+        try { msg = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (msg.type === 'progress') {
+          // Show transient progress in typing indicator area
+          const el = document.getElementById(typingId);
+          if (el) el.querySelector('.typing-dots').innerHTML =
+            `<span style="font-size:11px;color:var(--muted)">${esc(msg.message)}</span>`;
+
+        } else if (msg.type === 'artifact') {
+          artifactInfos.push(msg.info);
+
+        } else if (msg.type === 'done') {
+          assistantText = msg.text;
+          isAskingFlag  = msg.is_asking || false;
+          // Accumulate tokens
+          tokens.prompt     += (msg.tokens.prompt     || 0);
+          tokens.candidates += (msg.tokens.candidates || 0);
+          tokens.total      += (msg.tokens.total      || 0);
+
+        } else if (msg.type === 'error') {
+          removeTyping(typingId);
+          addSystemMsg('❌ Error: ' + msg.message);
+          setBusy(false);
+          return;
+        }
+      }
+    }
+
+    removeTyping(typingId);
+    if (assistantText) addAssistantBubble(assistantText, artifactInfos, isAskingFlag);
+    updateTokSummary();
+    refreshSidebar();
+
+  } catch(e) {
+    removeTyping(typingId);
+    addSystemMsg('❌ ' + e);
+  }
+  setBusy(false);
+}
+
+/* ─── Bubble builders ────────────────────────────────────────────────────────── */
+function addUserBubble(text, filename) {
+  const box = document.getElementById('messages');
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+  let extra = filename ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">📎 ${esc(filename)}</div>` : '';
+  row.innerHTML = `<div class="bubble">${nl2br(text)}${extra}<div class="ts">${now()}</div></div>`;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+function addAssistantBubble(text, artifacts, isAsking) {
+  const box = document.getElementById('messages');
+  const row = document.createElement('div');
+  row.className = 'msg-row assistant';
+
+  let artHtml = '';
+  for (const info of (artifacts||[])) {
+    const icon = info.kind === 'dialogs' ? '📦'
+               : info.kind === 'wa_flow'  ? '💬'
+               : info.kind.startsWith('python') ? '🐍' : '📄';
+    const dl = info.download
+      ? `<a class="af-dl" href="/download/${esc(info.download)}" download>⬇ Download zip</a>`
+      : '';
+    artHtml += `
+    <div class="artifact-card">
+      <div class="af-title">${icon} ${esc(info.filename)} <span style="font-weight:400;font-size:11px;color:#1565c0">${esc(info.status)}</span></div>
+      <div class="af-path">${esc(info.destination)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(info.action_msg)}</div>
+      ${dl}
+    </div>`;
+  }
+
+  // If LLM is asking for more info — add a visual indicator so user knows to answer
+  const askingBadge = isAsking
+    ? `<div class="asking-badge">⏳ Waiting for your answers before generating files</div>`
+    : '';
+
+  // Style bubble differently when asking questions
+  const bubbleStyle = isAsking ? ' style="border-left:3px solid #f59e0b;background:#fffbeb"' : '';
+
+  row.innerHTML = `<div class="bubble"${bubbleStyle}>${nl2br(text)}${artHtml}${askingBadge}<div class="ts">${now()}</div></div>`;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+function addSystemMsg(text) {
+  const box = document.getElementById('messages');
+  const row = document.createElement('div');
+  row.className = 'msg-row system';
+  row.innerHTML = `<div class="bubble">${esc(text)}</div>`;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+}
+
+let _typingCounter = 0;
+function addTypingIndicator() {
+  const id  = 'typing-' + (++_typingCounter);
+  const box = document.getElementById('messages');
+  const row = document.createElement('div');
+  row.id = id; row.className = 'msg-row assistant';
+  row.innerHTML = `<div class="bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
+  box.appendChild(row);
+  box.scrollTop = box.scrollHeight;
+  return id;
+}
+function removeTyping(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+/* ─── Token summary ──────────────────────────────────────────────────────────── */
+function updateTokSummary() {
+  document.getElementById('tok-summary').innerHTML =
+    `🔵 In: ${fmtNum(tokens.prompt)}<br>🟢 Out: ${fmtNum(tokens.candidates)}<br>🔴 Total: ${fmtNum(tokens.total)}`;
+}
+
+/* ─── Busy state ─────────────────────────────────────────────────────────────── */
+function setBusy(b) {
+  isBusy = b;
+  document.getElementById('send-btn').disabled = b;
+  document.getElementById('msg-input').disabled = b;
+}
+
+/* ─── Attachment ─────────────────────────────────────────────────────────────── */
+async function handleFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res  = await fetch('/api/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) { alert(data.error); return; }
+    attachText  = data.text;
+    attachFname = data.filename;
+    document.getElementById('attach-name').textContent = '📎 ' + data.filename;
+    document.getElementById('attach-preview').classList.remove('hidden');
+  } catch(e) { alert('Upload failed: ' + e); }
+  input.value = '';
+}
+function clearAttach() {
+  attachText = ''; attachFname = '';
+  document.getElementById('attach-preview').classList.add('hidden');
+  document.getElementById('attach-name').textContent = '';
+}
+
+/* ─── Not-working panel ──────────────────────────────────────────────────────── */
+function toggleFix() {
+  const p = document.getElementById('fix-panel');
+  p.classList.toggle('hidden');
+  if (!p.classList.contains('hidden')) {
+    document.getElementById('fix-desc').focus();
+  }
+}
+function closeFix() {
+  document.getElementById('fix-panel').classList.add('hidden');
+  document.getElementById('fix-desc').value = '';
+}
+
+/* ─── Sidebar / history ──────────────────────────────────────────────────────── */
+async function refreshSidebar() {
+  const res  = await fetch('/api/history');
+  const list = await res.json();
+  const el   = document.getElementById('session-list');
+  if (!list.length) { el.innerHTML = '<div class="no-history">No sessions yet</div>'; return; }
+
+  el.innerHTML = list.map(s => `
+    <div class="session-item${s.session_id === sessionId ? ' active' : ''}"
+         onclick="loadSession('${s.session_id}','${esc(s.usecase_name)}',this)">
+      <div class="s-name">${esc(s.usecase_name)}</div>
+      <div class="s-date">${esc(s.date)}</div>
+      <div class="s-tok">
+        🔵 ${fmtNum(s.tokens.prompt)} · 🟢 ${fmtNum(s.tokens.candidates)} · 🔴 ${fmtNum(s.tokens.total)}
+      </div>
+      ${s.files_generated.length ? `<span class="s-badge">${s.files_generated.length} file${s.files_generated.length>1?'s':''}</span>` : ''}
+    </div>`).join('');
+}
+
+async function loadSession(sid, uname, el) {
+  // Just show the history modal for this session
+  document.querySelectorAll('.session-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+
+  const res  = await fetch('/api/history/' + sid);
+  const data = await res.json();
+
+  // Restore session in chat area if it exists in memory
+  showChat(sid, uname);
+  document.getElementById('messages').innerHTML = '';
+  tokens = { ...data.tokens };
+  updateTokSummary();
+
+  // Replay messages
+  for (const m of data.messages) {
+    if (m.role === 'user') addUserBubble(m.content);
+    else if (m.role === 'assistant') addAssistantBubble(m.content, [], false);
+    else addSystemMsg(m.content);
+  }
+
+  // Show files generated
+  if (data.files_generated.length) {
+    addSystemMsg(`📁 Files generated in this session: ${data.files_generated.map(f=>f.filename).join(', ')}`);
+  }
+}
+
+/* ─── Init ───────────────────────────────────────────────────────────────────── */
+refreshSidebar();
+</script>
+</body>
+</html>
