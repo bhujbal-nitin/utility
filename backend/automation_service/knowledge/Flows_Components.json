@@ -1,0 +1,312 @@
+{
+  
+  "components": [
+
+    {
+      "component_name": "TextHeading",
+      "type_value": "TextHeading",
+      "category": "text",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout", "If", "Switch"],
+      "required_properties": ["type", "text"],
+      "optional_properties": ["visible"],
+      "forbidden_properties": [],
+      "property_types": {
+        "text": "string",
+        "visible": "boolean"
+      },
+      "limits": {
+        "text_max_length": 80
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "TextSubheading",
+      "type_value": "TextSubheading",
+      "category": "text",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout", "If", "Switch"],
+      "required_properties": ["type", "text"],
+      "optional_properties": ["visible"],
+      "limits": {
+        "text_max_length": 80
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "TextBody",
+      "type_value": "TextBody",
+      "category": "text",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout", "If", "Switch"],
+      "required_properties": ["type", "text"],
+      "optional_properties": ["visible", "font-weight", "strikethrough", "markdown"],
+      "property_value_constraints": {
+        "font-weight": ["normal", "bold", "italic", "bold_italic"]
+      },
+      "limits": {
+        "text_max_length": 4096
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "TextCaption",
+      "type_value": "TextCaption",
+      "category": "text",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout", "If", "Switch"],
+      "required_properties": ["type", "text"],
+      "optional_properties": ["visible", "font-weight", "strikethrough", "markdown"],
+      "limits": {
+        "text_max_length": 409
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "RichText",
+      "type_value": "RichText",
+      "category": "text",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout"],
+      "required_properties": ["type", "text"],
+      "optional_properties": ["visible"],
+      "usage_limits": {
+        "standalone_only_before_version": "6.3"
+      },
+      "supported_from_version": "5.1"
+    },
+
+    {
+      "component_name": "TextInput",
+      "type_value": "TextInput",
+      "category": "input",
+      "supported": true,
+      "allowed_parents": ["Form"],
+      "required_properties": ["type", "label", "name"],
+      "optional_properties": [
+        "input-type",
+        "required",
+        "min-chars",
+        "max-chars",
+        "pattern",
+        "helper-text",
+        "visible"
+      ],
+      "property_value_constraints": {
+        "input-type": ["text", "number", "email", "password", "passcode", "phone"]
+      },
+      "conditional_rules": [
+        {
+          "if": "pattern is defined",
+          "then": "helper-text is required"
+        }
+      ],
+      "limits": {
+        "label_max_length": 20,
+        "helper_text_max_length": 80,
+        "error_message_max_length": 30
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "TextArea",
+      "type_value": "TextArea",
+      "category": "input",
+      "supported": true,
+      "allowed_parents": ["Form"],
+      "required_properties": ["type", "label", "name"],
+      "optional_properties": ["required", "max-length", "helper-text", "visible"],
+      "limits": {
+        "max_length": 600
+      },
+      "supported_from_version": "7.0"
+    },
+
+    {
+      "component_name": "Dropdown",
+      "type_value": "Dropdown",
+      "category": "input",
+      "supported": true,
+      "allowed_parents": ["Form"],
+      "required_properties": ["type", "label", "name", "data-source"],
+      "optional_properties": ["required", "visible"],
+      "forbidden_properties": ["options"],
+      "property_types": {
+        "data-source": "array"
+      },
+      "usage_limits": {
+        "min_options": 1,
+        "max_options": 200
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "CheckboxGroup",
+      "type_value": "CheckboxGroup",
+      "category": "input",
+      "supported": true,
+      "allowed_parents": ["Form"],
+      "required_properties": ["type", "name", "data-source"],
+      "optional_properties": ["label", "min-selected-items", "max-selected-items", "visible"],
+      "usage_limits": {
+        "min_options": 1,
+        "max_options": 20
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "RadioButtonsGroup",
+      "type_value": "RadioButtonsGroup",
+      "category": "input",
+      "supported": true,
+      "allowed_parents": ["Form"],
+      "required_properties": ["type", "name", "data-source"],
+      "optional_properties": ["label", "visible"],
+      "usage_limits": {
+        "min_options": 1,
+        "max_options": 20
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "OptIn",
+      "type_value": "OptIn",
+      "category": "consent",
+      "supported": true,
+      "allowed_parents": ["Form"],
+      "required_properties": ["type", "label", "name"],
+      "optional_properties": ["required", "visible"],
+      "usage_limits": {
+        "max_per_screen": 5
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "DatePicker",
+      "type_value": "DatePicker",
+      "category": "input",
+      "supported": true,
+      "allowed_parents": ["Form"],
+      "required_properties": ["type", "label", "name"],
+      "optional_properties": ["min-date", "max-date", "helper-text", "visible"],
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "CalendarPicker",
+      "type_value": "CalendarPicker",
+      "category": "input",
+      "supported": true,
+      "allowed_parents": ["Form"],
+      "required_properties": ["type", "label", "name"],
+      "optional_properties": ["mode", "min-date", "max-date", "visible"],
+      "supported_from_version": "6.1"
+    },
+
+    {
+      "component_name": "Image",
+      "type_value": "Image",
+      "category": "media",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout", "If", "Switch"],
+      "required_properties": ["type", "src"],
+      "optional_properties": ["height", "width", "scale-type", "alt-text"],
+      "property_value_constraints": {
+        "scale-type": ["contain", "cover"]
+      },
+      "usage_limits": {
+        "max_per_screen": 3,
+        "max_size_kb": 300
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "Footer",
+      "type_value": "Footer",
+      "category": "action",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout", "If"],
+      "required_properties": ["type", "label", "on-click-action"],
+      "usage_limits": {
+        "max_per_screen": 1
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "If",
+      "type_value": "If",
+      "category": "logic",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout"],
+      "required_properties": ["type", "condition", "then"],
+      "optional_properties": ["else"],
+      "usage_limits": {
+        "max_nesting_depth": 3
+      },
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "Switch",
+      "type_value": "Switch",
+      "category": "logic",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout"],
+      "required_properties": ["type", "value", "cases"],
+      "supported_from_version": "4.0"
+    },
+
+    {
+      "component_name": "NavigationList",
+      "type_value": "NavigationList",
+      "category": "navigation",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout"],
+      "usage_limits": {
+        "max_per_screen": 2,
+        "cannot_be_terminal": true
+      },
+      "supported_from_version": "6.2"
+    },
+
+    {
+      "component_name": "ChipsSelector",
+      "type_value": "ChipsSelector",
+      "category": "input",
+      "supported": true,
+      "allowed_parents": ["Form"],
+      "required_properties": ["type", "label", "name", "data-source"],
+      "usage_limits": {
+        "min_options": 2,
+        "max_options": 20
+      },
+      "supported_from_version": "6.3"
+    },
+
+    {
+      "component_name": "ImageCarousel",
+      "type_value": "ImageCarousel",
+      "category": "media",
+      "supported": true,
+      "allowed_parents": ["SingleColumnLayout"],
+      "usage_limits": {
+        "min_images": 1,
+        "max_images": 3,
+        "max_per_screen": 2
+      },
+      "supported_from_version": "7.1"
+    }
+
+  ]
+}

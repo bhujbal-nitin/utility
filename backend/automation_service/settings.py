@@ -1,37 +1,28 @@
-"""settings.py — persists all user config to settings.json"""
-import os, json
-
-SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
-
-DEFAULTS = {
-    "service_account_path": "",
-    "project_id":           "",
-    "vertex_location":      "us-central1",
-    "vertex_model":         "gemini-2.0-flash",
-    "pylibs_path":          "",
-    "kb_folder":            "",
-    "system_prompt_path":   "",
-    "scripts_dir":          "",
-    "card_helper_dir":      "",
-    "templates_dir":        "",
-    "hooks_dir":            "",
-}
+from core.config import settings as core_settings
+import os
 
 def load() -> dict:
-    if not os.path.exists(SETTINGS_FILE):
-        return {}
-    with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    # Resolve relative paths against the backend root so it works regardless of CWD if needed
+    # But since uvicorn runs typically from backend/, relative defaults work nicely.
+    return {
+        "service_account_path": core_settings.VERTEX_KEY_PATH,
+        "project_id":           core_settings.VERTEX_PROJECT_ID,
+        "vertex_location":      core_settings.VERTEX_LOCATION,
+        "vertex_model":         core_settings.VERTEX_MODEL,
+        "pylibs_path":          "",
+        "kb_folder":            core_settings.AI_STUDIO_KB_FOLDER,
+        "system_prompt_path":   core_settings.AI_STUDIO_SYSTEM_PROMPT_PATH,
+        "scripts_dir":          core_settings.AI_STUDIO_SCRIPTS_DIR,
+        "card_helper_dir":      core_settings.AI_STUDIO_CARD_HELPER_DIR,
+        "templates_dir":        core_settings.AI_STUDIO_TEMPLATES_DIR,
+        "hooks_dir":            core_settings.AI_STUDIO_HOOKS_DIR,
+    }
 
 def save(data: dict):
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump({**DEFAULTS, **data}, f, indent=2)
+    pass
 
 def is_configured() -> bool:
-    s = load()
-    return all(s.get(k, "").strip() for k in
-               ["service_account_path", "project_id", "kb_folder",
-                "system_prompt_path", "scripts_dir", "hooks_dir"])
+    return True
 
 def get(key: str, fallback="") -> str:
     return load().get(key, fallback)

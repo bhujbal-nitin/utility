@@ -92,11 +92,12 @@ def deploy_artifact(artifact: dict, usecase_name: str,
         dest = os.path.join(dest_dir, fname)
         with open(dest, "w", encoding="utf-8") as f:
             f.write(artifact["content"])
+
         return {
             "kind":        kind,
             "filename":    fname,
             "destination": dest,
-            "download":    None,
+            "download":    None,  # No download link for scripts
             "status":      "✅",
             "action_msg":  f"Saved to scripts directory as {fname}",
         }
@@ -110,11 +111,12 @@ def deploy_artifact(artifact: dict, usecase_name: str,
             shutil.copy2(dest, dest.replace(".py", f"_bak_{ts}.py"))
         with open(dest, "w", encoding="utf-8") as f:
             f.write(artifact["content"])
+            
         return {
             "kind":        kind,
             "filename":    "custom_hook.py",
             "destination": dest,
-            "download":    None,
+            "download":    None, # No download link
             "status":      "✅",
             "action_msg":  "Saved to hooks directory (previous backed up)",
         }
@@ -126,11 +128,12 @@ def deploy_artifact(artifact: dict, usecase_name: str,
         dest = os.path.join(dest_dir, artifact["filename"])
         with open(dest, "w", encoding="utf-8") as f:
             f.write(artifact["content"])
+            
         return {
             "kind":        kind,
             "filename":    artifact["filename"],
             "destination": dest,
-            "download":    None,
+            "download":    None, # No download link
             "status":      "✅",
             "action_msg":  "Saved to card helper directory",
         }
@@ -142,11 +145,12 @@ def deploy_artifact(artifact: dict, usecase_name: str,
         dest = os.path.join(dest_dir, artifact["filename"])
         with open(dest, "w", encoding="utf-8") as f:
             f.write(artifact["content"])
+            
         return {
             "kind":        kind,
             "filename":    artifact["filename"],
             "destination": dest,
-            "download":    None,
+            "download":    None, # No download link
             "status":      "✅",
             "action_msg":  "Saved to templates directory",
         }

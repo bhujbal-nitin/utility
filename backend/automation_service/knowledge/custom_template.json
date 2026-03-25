@@ -1,0 +1,27 @@
+{
+    "type": "AdaptiveCard",
+    "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+    "version": "1.5",
+    "msTeams": { "width": "full" },
+    "body": [
+        {
+            "type": "TextBlock",
+            "text": "Header Title",
+            "weight": "bolder",
+            "size": "medium",
+            "horizontalAlignment": "center"
+        },
+        {
+            "type": "Table",
+            "columns": [],
+            "rows": [
+                {
+                    "type": "TableRow",
+                    "cells": [],
+                    "style": "emphasis"
+                }
+            ]
+        }
+    ],
+    "actions": []
+}

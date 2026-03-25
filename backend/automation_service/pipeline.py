@@ -31,7 +31,8 @@ def _init_vertex():
     from google.oauth2 import service_account
 
     creds = service_account.Credentials.from_service_account_file(s["service_account_path"])
-    vertexai.init(project=s["project_id"],
+    prj = s.get("project_id", "").strip() or getattr(creds, "project_id", None)
+    vertexai.init(project=prj,
                   location=s.get("vertex_location", "us-central1"),
                   credentials=creds)
 

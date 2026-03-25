@@ -19,7 +19,7 @@ import re, json
 
 def _blocks(text: str) -> list[tuple[str, str]]:
     return [(lang.lower().strip() if lang else "", code.strip())
-            for lang, code in re.findall(r"```(\w+)?\n(.*?)```", text, re.DOTALL)]
+            for lang, code in re.findall(r"```(\w*)\n(.*?)```", text, re.DOTALL)]
 
 
 def _parse_json(code: str):

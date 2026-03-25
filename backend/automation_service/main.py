@@ -1,5 +1,6 @@
 import os, json, queue, threading, tempfile, uuid, asyncio
 from fastapi import FastAPI, Request, Response, HTTPException, Depends, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -15,10 +16,19 @@ from automation_service.extractor import extract_text
 # Cross-service deps
 from core.deps import RequireRole, get_current_user
 from auth_service.models import User, RoleEnum
+from core.config import settings as core_settings
 
 app = FastAPI(title="Edge Assistant Automation Service", version="0.1.0")
-DOWNLOADS_DIR = os.path.join(os.path.dirname(__file__), "downloads")
-os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+DOWNLOADS_DIR = core_settings.AI_STUDIO_DOWNLOADS_DIR
 
 # Required Roles setup
 automation_role = RequireRole([RoleEnum.AUTOMATION, RoleEnum.ADMIN])
@@ -123,7 +133,23 @@ async def api_history_session(session_id: str):
 
 @app.get("/download/{filename}", dependencies=[Depends(automation_role)])
 async def download(filename: str):
-    file_path = os.path.join(DOWNLOADS_DIR, filename)
-    if not os.path.exists(file_path):
+    # Search for the file in all relevant storage folders
+    search_dirs = [
+        core_settings.AI_STUDIO_DOWNLOADS_DIR,
+        core_settings.AI_STUDIO_SCRIPTS_DIR,
+        core_settings.AI_STUDIO_TEMPLATES_DIR,
+        core_settings.AI_STUDIO_CARD_HELPER_DIR,
+        core_settings.AI_STUDIO_HOOKS_DIR
+    ]
+    
+    file_path = None
+    for d in search_dirs:
+        potential_path = os.path.join(d, filename)
+        if os.path.exists(potential_path):
+            file_path = potential_path
+            break
+            
+    if not file_path:
         raise HTTPException(status_code=404, detail="File not found")
+        
     return FileResponse(file_path, filename=filename)

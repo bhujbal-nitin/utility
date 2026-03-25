@@ -1,9 +1,12 @@
 from pydantic import BaseModel, EmailStr
 from auth_service.models import RoleEnum
 
+from typing import Optional
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    role: Optional[RoleEnum] = RoleEnum.BA
 
 class UserResponse(BaseModel):
     id: str

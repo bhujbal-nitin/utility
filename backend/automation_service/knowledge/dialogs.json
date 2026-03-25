@@ -1,0 +1,634 @@
+{
+    "dialogs": [
+        {
+            "name": "welcome_dialog",
+            "elements": [
+                {
+                    "message": "Hi, I am AIStudioBot. How can I help you?",
+                    "element_condition": "True",
+                    "type": "message"
+                },
+                {
+                    "conditions": [
+                        {
+                            "value": "True",
+                            "target": "Input"
+                        }
+                    ],
+                    "element_condition": "True",
+                    "type": "branch"
+                }
+            ],
+            "description": "",
+            "has_feedback": false
+        },
+        {
+            "name": "Input",
+            "elements": [
+                {
+                    "elements": [],
+                    "element_condition": "True",
+                    "type": "group"
+                },
+                {
+                    "input_type": "date",
+                    "id": "Date",
+                    "message": "For what date you want to fill the status",
+                    "state": "dialog",
+                    "nlu_response_state": "dialog",
+                    "nlu_response_id": "",
+                    "call_nlu": false,
+                    "retry_message": "For what date you want to fill the status",
+                    "max_attempts": 0,
+                    "is_required": false,
+                    "label": "",
+                    "input_choices": null,
+                    "choice_style": "hero_card",
+                    "default_value": null,
+                    "min": null,
+                    "max": null,
+                    "regex": null,
+                    "ignore_case": null,
+                    "function": null,
+                    "nlu_entity": null,
+                    "element_condition": "True",
+                    "type": "input"
+                },
+                {
+                    "input_type": "text",
+                    "id": "Text",
+                    "message": "Use case project",
+                    "state": "dialog",
+                    "nlu_response_state": "dialog",
+                    "nlu_response_id": "",
+                    "call_nlu": false,
+                    "retry_message": "Use case project",
+                    "max_attempts": 0,
+                    "is_required": false,
+                    "label": "",
+                    "input_choices": null,
+                    "choice_style": "hero_card",
+                    "default_value": null,
+                    "min": null,
+                    "max": null,
+                    "regex": null,
+                    "ignore_case": null,
+                    "function": null,
+                    "nlu_entity": "",
+                    "element_condition": "True",
+                    "type": "input"
+                },
+                {
+                    "input_type": "choice",
+                    "id": "Choice",
+                    "message": "Enter Project Laed",
+                    "state": "dialog",
+                    "nlu_response_state": "dialog",
+                    "nlu_response_id": "",
+                    "call_nlu": false,
+                    "retry_message": "Enter Project Laed",
+                    "max_attempts": 0,
+                    "is_required": false,
+                    "label": "",
+                    "input_choices": "John, Rcik ",
+                    "choice_style": "list_style",
+                    "default_value": null,
+                    "min": null,
+                    "max": null,
+                    "regex": null,
+                    "ignore_case": null,
+                    "function": null,
+                    "nlu_entity": "",
+                    "element_condition": "True",
+                    "type": "input"
+                },
+                {
+                    "input_type": "time",
+                    "id": "Time",
+                    "message": "Please enter time",
+                    "state": "dialog",
+                    "nlu_response_state": "dialog",
+                    "nlu_response_id": "",
+                    "call_nlu": false,
+                    "retry_message": "Please enter time",
+                    "max_attempts": 0,
+                    "is_required": false,
+                    "label": "",
+                    "input_choices": null,
+                    "choice_style": "hero_card",
+                    "default_value": null,
+                    "min": null,
+                    "max": null,
+                    "regex": null,
+                    "ignore_case": null,
+                    "function": null,
+                    "nlu_entity": null,
+                    "element_condition": "True",
+                    "type": "input"
+                },
+                {
+                    "input_type": "number",
+                    "id": "Number",
+                    "message": "Please enter number",
+                    "state": "dialog",
+                    "nlu_response_state": "dialog",
+                    "nlu_response_id": "",
+                    "call_nlu": false,
+                    "retry_message": "Please enter number",
+                    "max_attempts": 0,
+                    "is_required": false,
+                    "label": "",
+                    "input_choices": null,
+                    "choice_style": "hero_card",
+                    "default_value": null,
+                    "min": null,
+                    "max": null,
+                    "regex": null,
+                    "ignore_case": null,
+                    "function": null,
+                    "nlu_entity": null,
+                    "element_condition": "True",
+                    "type": "input"
+                },
+                {
+                    "conditions": [
+                        {
+                            "action_name": "Action 1",
+                            "value": "True",
+                            "action_type": "ae_workflow",
+                            "response": {
+                                "wait_for_response": false,
+                                "timeout_in_seconds": null,
+                                "wait_message": null,
+                                "timeout_message": null,
+                                "variable_name": null,
+                                "variable_state": null
+                            },
+                            "output_format": [
+                                {
+                                    "condition": "${wf.success}==True",
+                                    "output_type": "Text",
+                                    "message": "Successful",
+                                    "card_type": null,
+                                    "card_data": null,
+                                    "list_variable": null,
+                                    "files_order": 2
+                                }
+                            ],
+                            "message": "",
+                            "function": null,
+                            "connection_name": "T3_Connection",
+                            "workflow": {
+                                "id": 39786,
+                                "workflowName": "EmployeeOnboarding",
+                                "description": "Employee Onboarding use case",
+                                "inputAttributesEnabled": false,
+                                "inputAttribute1": null,
+                                "inputAttribute2": null,
+                                "inputAttribute3": null,
+                                "inputAttribute4": null,
+                                "inputAttribute5": null,
+                                "inputAttribute6": null,
+                                "parameterConfiguration": {
+                                    "grouping": []
+                                },
+                                "params": [
+                                    {
+                                        "name": "first_name",
+                                        "type": "String",
+                                        "order": 1,
+                                        "secret": false,
+                                        "optional": false,
+                                        "displayName": "First Name",
+                                        "aistudio": {
+                                            "value": "${dialog.Input.Text}",
+                                            "type": "input"
+                                        },
+                                        "uiControlType": "TextBox",
+                                        "poolCredential": false,
+                                        "defaultValue": null,
+                                        "extension": null,
+                                        "listOfValues": [],
+                                        "valueSeparator": ","
+                                    },
+                                    {
+                                        "name": "last_ame",
+                                        "type": "String",
+                                        "order": 2,
+                                        "secret": false,
+                                        "optional": false,
+                                        "displayName": "Last Name",
+                                        "aistudio": {
+                                            "value": "${dialog.Input.Date}",
+                                            "type": "input"
+                                        },
+                                        "uiControlType": "TextBox",
+                                        "poolCredential": false,
+                                        "defaultValue": null,
+                                        "extension": null,
+                                        "listOfValues": [],
+                                        "valueSeparator": ","
+                                    },
+                                    {
+                                        "name": "email",
+                                        "type": "String",
+                                        "order": 3,
+                                        "secret": false,
+                                        "optional": false,
+                                        "displayName": "Email",
+                                        "aistudio": {
+                                            "value": "${dialog.Input.Time}",
+                                            "type": "input"
+                                        },
+                                        "uiControlType": "TextBox",
+                                        "poolCredential": false,
+                                        "defaultValue": null,
+                                        "extension": null,
+                                        "listOfValues": [],
+                                        "valueSeparator": ","
+                                    },
+                                    {
+                                        "name": "department",
+                                        "type": "String",
+                                        "order": 4,
+                                        "secret": false,
+                                        "optional": false,
+                                        "displayName": "Department",
+                                        "aistudio": {
+                                            "value": "${dialog.Input.Time}",
+                                            "type": "input"
+                                        },
+                                        "uiControlType": "TextBox",
+                                        "poolCredential": false,
+                                        "defaultValue": null,
+                                        "extension": null,
+                                        "listOfValues": [],
+                                        "valueSeparator": ","
+                                    },
+                                    {
+                                        "name": "chatBotEndPoint",
+                                        "type": "String",
+                                        "order": 5,
+                                        "secret": false,
+                                        "optional": false,
+                                        "displayName": "Chat Bot End Point",
+                                        "aistudio": {
+                                            "value": "wf_functions/chatbot_URL",
+                                            "type": "function"
+                                        },
+                                        "uiControlType": "TextBox",
+                                        "poolCredential": false,
+                                        "defaultValue": null,
+                                        "extension": null,
+                                        "listOfValues": [],
+                                        "valueSeparator": ","
+                                    },
+                                    {
+                                        "name": "additionalInfo",
+                                        "type": "String",
+                                        "order": 6,
+                                        "secret": false,
+                                        "optional": false,
+                                        "displayName": "additional Info",
+                                        "aistudio": {
+                                            "value": "wf_functions/additional_info",
+                                            "type": "function"
+                                        },
+                                        "uiControlType": "TextBox",
+                                        "poolCredential": false,
+                                        "defaultValue": null,
+                                        "extension": null,
+                                        "listOfValues": [],
+                                        "valueSeparator": ","
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "element_condition": "True",
+                    "type": "action"
+                },
+                {
+                    "conditions": [
+                        {
+                            "value": "True",
+                            "target": "Action"
+                        }
+                    ],
+                    "element_condition": "True",
+                    "type": "branch"
+                }
+            ],
+            "description": "",
+            "has_feedback": false
+        },
+        {
+            "name": "Action",
+            "elements": [
+                {
+                    "conditions": [
+                        {
+                            "action_name": "Action 1",
+                            "value": "True",
+                            "action_type": "ae_workflow",
+                            "response": {
+                                "wait_for_response": false,
+                                "timeout_in_seconds": null,
+                                "wait_message": null,
+                                "timeout_message": null,
+                                "variable_name": null,
+                                "variable_state": null
+                            },
+                            "output_format": [],
+                            "message": "",
+                            "function": null,
+                            "connection_name": "T3_Connection",
+                            "workflow": {
+                                "id": 38695,
+                                "workflowName": "DeveloperRetest",
+                                "description": "DeveloperRetest",
+                                "inputAttributesEnabled": false,
+                                "inputAttribute1": null,
+                                "inputAttribute2": null,
+                                "inputAttribute3": null,
+                                "inputAttribute4": null,
+                                "inputAttribute5": null,
+                                "inputAttribute6": null,
+                                "parameterConfiguration": {
+                                    "grouping": []
+                                },
+                                "params": []
+                            }
+                        }
+                    ],
+                    "element_condition": "True",
+                    "type": "action"
+                },
+                {
+                    "conditions": [
+                        {
+                            "action_name": "Action 1",
+                            "value": "True",
+                            "action_type": "python",
+                            "response": {
+                                "wait_for_response": true,
+                                "timeout_in_seconds": 60,
+                                "wait_message": "Fetching Men's collection...",
+                                "timeout_message": "Timeout fetching products.",
+                                "variable_name": null,
+                                "variable_state": null
+                            },
+                            "output_format": [],
+                            "message": "",
+                            "function": "ShopperStop/get_men_products",
+                            "connection_name": null,
+                            "workflow": null
+                        }
+                    ],
+                    "element_condition": "True",
+                    "type": "action"
+                },
+                {
+                    "card_type": "Adaptive List",
+                    "card_data": "{\"$schema\":\"http://adaptivecards.io/schemas/adaptive-card.json\",\"type\":\"AdaptiveCard\",\"version\":\"1.5\",\"body\":[{\"type\":\"Container\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"${list.name}\",\"weight\":\"Bolder\"},{\"type\":\"TextBlock\",\"text\":\"Price: ${list.price}\"},{\"type\":\"TextBlock\",\"text\":\"${list.description}\",\"isSubtle\":true,\"wrap\":true},{\"type\":\"ActionSet\",\"actions\":[{\"type\":\"Action.Submit\",\"title\":\"Add to Cart\",\"data\":{\"__trigger_aistudio_dialog__\":\"add_to_cart_flow\",\"product_name\":\"${list.name}\"}}]}]}]}",
+                    "has_input": false,
+                    "list_variable": "${dialog.fetch_men_dialog.men_products}",
+                    "response_variable": null,
+                    "response_variable_state": null,
+                    "element_condition": "True",
+                    "type": "card",
+                    "retry_message": null,
+                    "max_attempts": 0
+                }
+            ],
+            "description": "",
+            "has_feedback": false
+        },
+        {
+            "name": "Card",
+            "elements": [
+                {
+                    "card_type": "WhatsApp Flows",
+                    "card_data": "{\"mode\":\"draft\",\"buttons\":[{\"type\":\"flow\",\"flow_cta\":\"[Button Label]\",\"flow_token\":\"[Unique Token]\",\"flow_id\":\"[Generated ID]\",\"flow_action\":\"navigate\",\"flow_action_payload\":{\"screen\":\"[START_SCREEN_ID]\",\"data\":{\"key1\":\"[value1]\",\"key2\":\"[value2]\"}}}],\"header\":{\"type\":\"text\",\"text\":\"[Header Text]\"},\"body\":{\"text\":\"[Body Text]\"},\"footer\":{\"text\":\"[Footer Text]\"}}",
+                    "has_input": false,
+                    "list_variable": null,
+                    "response_variable": null,
+                    "response_variable_state": null,
+                    "element_condition": "True",
+                    "type": "card",
+                    "retry_message": null,
+                    "max_attempts": 0
+                },
+                {
+                    "card_type": "Adaptive",
+                    "card_data": "{\"$schema\":\"http://adaptivecards.io/schemas/adaptive-card.json\",\"type\":\"AdaptiveCard\",\"version\":\"1.5\",\"fallbackText\":\"Release review card requires Adaptive Cards v1.5\",\"body\":[{\"type\":\"TextBlock\",\"text\":\"\ud83d\ude80 Feature Release Readiness Review\",\"size\":\"Large\",\"weight\":\"Bolder\"},{\"type\":\"RichTextBlock\",\"inlines\":[{\"type\":\"TextRun\",\"text\":\"Release: \",\"weight\":\"Bolder\"},{\"type\":\"TextRun\",\"text\":\"Copilot Automation v3.4\",\"color\":\"Accent\"}]},{\"type\":\"Container\",\"style\":\"emphasis\",\"items\":[{\"type\":\"ColumnSet\",\"columns\":[{\"type\":\"Column\",\"width\":\"stretch\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"Owner\",\"weight\":\"Bolder\",\"size\":\"Small\"},{\"type\":\"TextBlock\",\"text\":\"AutomationEdge\",\"spacing\":\"None\"}]},{\"type\":\"Column\",\"width\":\"stretch\",\"items\":[{\"type\":\"TextBlock\",\"text\":\"Target Date\",\"weight\":\"Bolder\",\"size\":\"Small\"},{\"type\":\"TextBlock\",\"text\":\"15 Feb 2026\",\"spacing\":\"None\"}]},{\"type\":\"Column\",\"width\":\"auto\",\"items\":[{\"type\":\"Image\",\"url\":\"https://adaptivecards.io/content/checkmark.png\",\"size\":\"Small\",\"altText\":\"Ready Status\"}]}]}]},{\"type\":\"TextBlock\",\"text\":\"Release Summary\",\"weight\":\"Bolder\",\"spacing\":\"Medium\"},{\"type\":\"TextBlock\",\"text\":\"This release introduces adaptive workflow orchestration, improved error handling, and telemetry dashboards.\",\"wrap\":true},{\"type\":\"FactSet\",\"facts\":[{\"title\":\"Complexity\",\"value\":\"High\"},{\"title\":\"Risk Level\",\"value\":\"Medium\"},{\"title\":\"Environment\",\"value\":\"Production\"}]},{\"type\":\"TextBlock\",\"text\":\"Feature Screenshots\",\"weight\":\"Bolder\",\"spacing\":\"Medium\"},{\"type\":\"ImageSet\",\"imageSize\":\"Small\",\"images\":[{\"type\":\"Image\",\"url\":\"https://picsum.photos/200\",\"size\":\"Small\"},{\"type\":\"Image\",\"url\":\"https://picsum.photos/201\",\"size\":\"Small\"},{\"type\":\"Image\",\"url\":\"https://picsum.photos/202\",\"size\":\"Small\"}]},{\"type\":\"TextBlock\",\"text\":\"Demo Walkthrough\",\"weight\":\"Bolder\",\"spacing\":\"Medium\"},{\"type\":\"Media\",\"poster\":\"https://adaptivecards.io/content/poster.png\",\"sources\":[{\"mimeType\":\"video/mp4\",\"url\":\"https://adaptivecardsblob.blob.core.windows.net/assets/AdaptiveCardsOverviewVideo.mp4\"}]},{\"type\":\"Input.ChoiceSet\",\"id\":\"approvalDecision\",\"label\":\"Release Decision\",\"isRequired\":true,\"errorMessage\":\"Please select a decision\",\"choices\":[{\"title\":\"Approve Release\",\"value\":\"approve\"},{\"title\":\"Approve with Conditions\",\"value\":\"conditional\"},{\"title\":\"Block Release\",\"value\":\"block\"}]},{\"type\":\"Input.Toggle\",\"id\":\"rollbackReady\",\"title\":\"Rollback plan verified\",\"valueOn\":\"yes\",\"valueOff\":\"no\"},{\"type\":\"Input.Number\",\"id\":\"confidence\",\"label\":\"Release Confidence (0\u2013100)\",\"min\":0,\"max\":100},{\"type\":\"Input.Date\",\"id\":\"actualReleaseDate\",\"label\":\"Confirmed Release Date\"},{\"type\":\"Input.Time\",\"id\":\"releaseTime\",\"label\":\"Release Time (UTC)\"},{\"type\":\"Input.Text\",\"id\":\"reviewerNotes\",\"label\":\"Reviewer Notes\",\"isMultiline\":true,\"placeholder\":\"Add risks, dependencies, or follow-ups\"},{\"type\":\"TextBlock\",\"id\":\"riskDetails\",\"text\":\"\u26a0\ufe0f Known Risk: Increased latency under peak load if cache warming fails.\",\"isVisible\":false,\"color\":\"Warning\",\"wrap\":true}],\"actions\":[{\"type\":\"Action.ToggleVisibility\",\"title\":\"Toggle Risk Details\",\"targetElements\":[\"riskDetails\"]},{\"type\":\"Action.Submit\",\"title\":\"Submit Review\",\"data\":{\"__trigger_aistudio_dialog__\":\"File\",\"workflow\":\"release_readiness\",\"source\":\"copilot_card\"}},{\"type\":\"Action.ShowCard\",\"title\":\"Escalate Issue\",\"card\":{\"type\":\"AdaptiveCard\",\"version\":\"1.5\",\"body\":[{\"type\":\"Input.Text\",\"id\":\"escalationReason\",\"label\":\"Escalation Reason\",\"isMultiline\":true}],\"actions\":[{\"type\":\"Action.Submit\",\"title\":\"Escalate\",\"data\":{\"action\":\"escalate_release\"}}]}},{\"type\":\"Action.OpenUrl\",\"title\":\"View Release Dashboard\",\"url\":\"https://example.com/release-dashboard\"}]}",
+                    "has_input": false,
+                    "list_variable": null,
+                    "response_variable": null,
+                    "response_variable_state": null,
+                    "element_condition": "True",
+                    "type": "card",
+                    "retry_message": null,
+                    "max_attempts": 0
+                },
+                {
+                    "card_type": "Hero",
+                    "card_data": "{\"buttons\":[{\"type\":\"imBack\",\"title\":\"{\\\"title\\\":\\\"\ud83d\udcbc Action\\\",  \\\"description\\\":\\\"Payslip, tax & CTC \u2014 all in one \ud83d\udcb8\\\"}\",\"value\":\"{\\\"__trigger_aistudio_dialog__\\\": \\\"pay_roll\\\"}\"},{\"type\":\"imBack\",\"title\":\"{\\\"title\\\":\\\"\ud83d\udcd8 HR Policies\\\",  \\\"description\\\":\\\"\ud83d\udcda Download and explore all HR policies \u2014 rules made easy! \u2705\ud83d\udcc2\\\"}\",\"value\":\"{\\\"__trigger_aistudio_dialog__\\\": \\\"File\\\"}\"},{\"type\":\"imBack\",\"title\":\"{\\\"title\\\":\\\"\ud83d\udcbbMeeting Room\\\", \\\"description\\\":\\\"\ud83e\udd1d\ud83c\udfe2 Find and book a conference room in seconds \u2014 stress-free. \ud83d\ude04\\\"}\",\"value\":\"{\\\"__trigger_aistudio_dialog__\\\": \\\"Input\\\"}\"}],\"text\":\"{\\\"text\\\": \\\"What\u2019s the plan? Pick a service and let\u2019s gooo \ud83d\ude80\ud83d\udccb\\\",\\\"button\\\": \\\"Main Menu\\\"}\"}",
+                    "has_input": false,
+                    "list_variable": null,
+                    "response_variable": null,
+                    "response_variable_state": null,
+                    "element_condition": "True",
+                    "type": "card",
+                    "retry_message": null,
+                    "max_attempts": 0
+                }
+            ],
+            "description": "",
+            "has_feedback": false
+        },
+        {
+            "name": "File",
+            "elements": [
+                {
+                    "message": "Please upload file",
+                    "element_condition": "True",
+                    "type": "message"
+                },
+                {
+                    "id": "File",
+                    "state": "conversation",
+                    "message": "",
+                    "retry_message": "",
+                    "max_attempts": 0,
+                    "extensions": "pdf, txt, docx",
+                    "size": 1000,
+                    "optional": false,
+                    "element_condition": "True",
+                    "type": "file_input"
+                }
+            ],
+            "description": "",
+            "has_feedback": false
+        },
+        {
+            "name": "Form",
+            "elements": [
+                {
+                    "title": "Adaptive_Card_Form",
+                    "adaptive_card": true,
+                    "confirm_on_submit": false,
+                    "elements": [
+                        {
+                            "input_type": "text",
+                            "id": "name",
+                            "message": "Enter your name",
+                            "state": "dialog",
+                            "nlu_response_state": "dialog",
+                            "nlu_response_id": "",
+                            "call_nlu": false,
+                            "retry_message": "Enter your name",
+                            "max_attempts": 0,
+                            "is_required": false,
+                            "label": "",
+                            "input_choices": null,
+                            "choice_style": "hero_card",
+                            "default_value": null,
+                            "min": null,
+                            "max": null,
+                            "regex": null,
+                            "ignore_case": null,
+                            "function": null,
+                            "nlu_entity": "",
+                            "element_condition": "True",
+                            "type": "input"
+                        }
+                    ],
+                    "element_condition": "True",
+                    "type": "form"
+                },
+                {
+                    "title": "Confirm_On_Submit_Form",
+                    "adaptive_card": false,
+                    "confirm_on_submit": true,
+                    "elements": [
+                        {
+                            "input_type": "number",
+                            "id": "age",
+                            "message": "Enter your age",
+                            "state": "dialog",
+                            "nlu_response_state": "dialog",
+                            "nlu_response_id": "",
+                            "call_nlu": false,
+                            "retry_message": "Enter your age",
+                            "max_attempts": 0,
+                            "is_required": false,
+                            "label": "",
+                            "input_choices": null,
+                            "choice_style": "hero_card",
+                            "default_value": null,
+                            "min": null,
+                            "max": null,
+                            "regex": null,
+                            "ignore_case": null,
+                            "function": null,
+                            "nlu_entity": null,
+                            "element_condition": "True",
+                            "type": "input"
+                        }
+                    ],
+                    "element_condition": "True",
+                    "type": "form"
+                }
+            ],
+            "description": "It is used for getting input as form",
+            "has_feedback": false
+        },
+        {
+            "name": "Set_State",
+            "elements": [
+                {
+                    "set_state_variables": [
+                        {
+                            "type": "dialog",
+                            "key": "Company",
+                            "value_type": "string",
+                            "value": "AE"
+                        }
+                    ],
+                    "element_condition": "True",
+                    "type": "set_state"
+                },
+                {
+                    "set_state_variables": [
+                        {
+                            "type": "conversation",
+                            "key": "Tickets",
+                            "value_type": "dictionary",
+                            "value": "{\"items\":[{\"ticketId\":\"TCKT001\",\"issueDescription\":\"Unable to access HR portal\",\"createdOn\":\"02 Dec\",\"status\":\"Open\"},{\"ticketId\":\"TCKT002\",\"issueDescription\":\"Laptop VPN not connecting\",\"createdOn\":\"15 Dec\",\"status\":\"In Progress\"},{\"ticketId\":\"TCKT003\",\"issueDescription\":\"Email not syncing on mobile\",\"createdOn\":\"18 Dec\",\"status\":\"Resolved\"},{\"ticketId\":\"TCKT004\",\"issueDescription\":\"Password reset required\",\"createdOn\":\"22 Dec\",\"status\":\"Closed\"}]}"
+                        }
+                    ],
+                    "element_condition": "True",
+                    "type": "set_state"
+                }
+            ],
+            "description": "It is used to create a variable and to change the state of existing variable.",
+            "has_feedback": false
+        }
+    ],
+    "triggers": [
+        {
+            "type": "regex",
+            "target_name": "welcome_dialog",
+            "order": 0,
+            "regex": "XmhpJA==",
+            "ignore_case": true,
+            "intent": null
+        }
+    ],
+    "canvas": {
+        "display": [
+            {
+                "id": "welcome_dialog",
+                "x": -108.85910822023902,
+                "y": -387.77983983952345
+            },
+            {
+                "id": "Input",
+                "x": -228.09596746244893,
+                "y": -390.0868685769584
+            },
+            {
+                "id": "Action",
+                "x": -228.64429318259482,
+                "y": -337.70191671129464
+            },
+            {
+                "id": "Card",
+                "x": -119.07135278030745,
+                "y": -336.6529416413556
+            },
+            {
+                "id": "File",
+                "x": -8.93458363810123,
+                "y": -337.1587977225219
+            },
+            {
+                "id": "Form",
+                "x": 41.919350133112516,
+                "y": -388.72659162519585
+            },
+            {
+                "id": "Set_State",
+                "x": 99.95752880623752,
+                "y": -336.9771955838273
+            }
+        ],
+        "transform": {
+            "x": 0,
+            "y": 0,
+            "k": 1
+        }
+    },
+    "version": "3.6.0"
+}

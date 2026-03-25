@@ -38,7 +38,9 @@ def _make_zip(files: dict, zip_name: str, output_dir: str) -> str:
     os.makedirs(folder)
     try:
         for name, content in files.items():
-            with open(os.path.join(folder, name), "w", encoding="utf-8") as f:
+            fpath = os.path.join(folder, name)
+            os.makedirs(os.path.dirname(fpath), exist_ok=True)
+            with open(fpath, "w", encoding="utf-8") as f:
                 f.write(content)
         create_checksum_txt(folder)
         tmp_zip = os.path.join(tmp, zip_name)

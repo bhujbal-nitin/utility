@@ -1,70 +1,136 @@
-# Getting Started with Create React App
+# Edge Assistant (AI-Powered RPA Migration & Automation Platform)
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Edge Assistant is a production-grade, microservice-based platform designed to accelerate enterprise automation by migrating legacy RPA workflows (UiPath, Blue Prism, Automation Anywhere) to **AutomationEdge** using Generative AI (Vertex AI).
 
-## Available Scripts
+![Branding](/frontend/public/ae-icon.png)
 
-In the project directory, you can run:
+## 🚀 Key Features
 
-### `npm start`
+- **RPA Migration Studio (Port 8004)**:
+    - Port legacy workflows from **UiPath**, **Blue Prism**, and **Automation Anywhere**.
+    - **Vision AI Support**: Process and analyze screenshots of legacy bots.
+    - **Intelligent Chunking**: Handle massive workflow files (>50MB) with recursive AI analysis.
+    - **SHA256 Cache**: Instant response for identical workflows using PostgreSQL hashing.
+- **AI Automation Studio (Port 8003)**:
+    - Generate functional RPA Python scripts and deployment dialogs using natural language.
+    - Real-time syntax highlighting for all generated code blocks.
+- **Document & Proposal Engine (Ports 8001/8002)**:
+    - Generate comprehensive BRDs and sales proposals based on project descriptions.
+- **Secure Architecture**:
+    - Centralized JWT authentication (`auth_service` on Port 8000).
+    - Role-based Access Control (AE, BA, Sales, Admin).
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+---
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## 🏗️ Architecture
 
-### `npm test`
+```mermaid
+graph TD
+    subgraph Frontend
+        React["React UI (Port 3000)"]
+    end
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+    subgraph Backend Microservices
+        Auth["Auth Service (8000)"]
+        BRD["BRD Service (8001)"]
+        Prop["Proposal Service (8002)"]
+        Auto["Automation Service (8003)"]
+        Migr["Migration Service (8004)"]
+    end
 
-### `npm run build`
+    subgraph Data Layer
+        DB[(PostgreSQL)]
+        Cache[(Redis)]
+        Storage[/ae_studio_data/]
+    end
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+    React --> Auth
+    React --> BRD
+    React --> Prop
+    React --> Auto
+    React --> Migr
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+    Auth --> DB
+    Migr --> DB
+    Migr --> VertexAI[Vertex AI Gemini 2.0]
+    Auto --> Storage
+    Auto --> VertexAI
+```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+---
 
-### `npm run eject`
+## 📦 Prerequisites
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+- **Docker & Docker Compose**
+- **Google Cloud Platform**: A valid Project ID and `vertex-key.json` within the `backend/` directory.
+- **Node.js 20+** (only for manual development)
+- **Python 3.11+** (only for manual development)
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+---
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## ⚡ Quick Start (Docker - Recommended)
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+1. **Configure Environment**:
+   ```bash
+   cp .env.docker.example .env
+   # Edit .env with your specific Project ID and Secret Keys
+   ```
 
-## Learn More
+2. **Verify Credentials**:
+   Place your GCP service account key at `backend/vertex-key.json`.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+3. **Deploy with Compose**:
+   ```bash
+   docker-compose up --build -d
+   ```
+   - **Frontend**: http://localhost:3000
+   - **Microservices**: Accessible on ports 8000-8004
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+---
 
-### Code Splitting
+## 🛠️ Service Map
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+| Service | Port | Description |
+| :--- | :--- | :--- |
+| **Frontend** | 3000 | React UI (Nginx Alpine) |
+| **Auth** | 8000 | JWT & Role Management |
+| **BRD** | 8001 | Business Requirement Generation |
+| **Proposal** | 8002 | Automated Sales Proposals |
+| **Automation** | 8003 | AI Studio - Script & Dialog Generation |
+| **Migration** | 8004 | RPA Workflow Translation (UiPath/BP/AA) |
+| **Postgres** | 5432 | User data & Cache storage |
+| **Redis** | 6379 | Rate limiting & caching engine |
 
-### Analyzing the Bundle Size
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## 📂 Project Structure
 
-### Making a Progressive Web App
+```bash
+├── backend/
+│   ├── auth_service/       # JWT Auth logic
+│   ├── automation_service/ # AI Studio Core
+│   ├── migration_service/  # RPA Transformer
+│   ├── core/               # Shared DB & Security deps
+│   ├── Dockerfile          # Multi-stage Python Slim build
+│   └── requirements.txt    # Shared dependencies
+├── frontend/
+│   ├── src/
+│   │   ├── components/     # UI & Chat Logic
+│   │   ├── context/        # Auth context
+│   ├── Dockerfile          # Build + Nginx Alpine stage
+│   └── public/             # Assets (ae-icon.png)
+└── ae_studio_data/         # Persistent production storage
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+---
 
-### Advanced Configuration
+## 🔒 Security Best Practices
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+- Always run behind an SSL-enabled reverse proxy for production.
+- Use the non-root `appuser` provided in the backend `Dockerfile`.
+- Ensure `SECRET_KEY` in `.env` is rotated regularly.
+- Rate limits are active on all public endpoints via `FastAPILimiter`.
 
-### Deployment
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+© 2026 Edge Assistant. Powered by **Vertex AI** and **AutomationEdge**.

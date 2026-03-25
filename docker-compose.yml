@@ -1,0 +1,157 @@
+version: '3.8'
+
+services:
+  # Database logic
+  db:
+    image: postgres:15-alpine
+    container_name: edge_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-edge_assistant}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - edge_network
+
+  # Rate limiting & caching
+  redis:
+    image: redis:7-alpine
+    container_name: edge_redis
+    restart: always
+    networks:
+      - edge_network
+
+  # Core Auth Service (Port 8000)
+  auth-service:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: auth_service
+    command: uvicorn auth_service.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - db
+      - redis
+    environment:
+      - POSTGRES_SERVER=db
+      - REDIS_HOST=redis
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=10080
+    ports:
+      - "8000:8000"
+    networks:
+      - edge_network
+
+  # Automation & Artifact Service (Port 8003)
+  automation-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: automation_service
+    command: uvicorn automation_service.main:app --host 0.0.0.0 --port 8003
+    depends_on:
+      - db
+      - redis
+    environment:
+      - POSTGRES_SERVER=db
+      - REDIS_HOST=redis
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=HS256
+      - AE_STUDIO_DATA_DIR=/app/ae_studio_data
+      - VERTEX_KEY_PATH=/app/vertex-key.json
+    volumes:
+      - ./ae_studio_data:/app/ae_studio_data
+      - ./backend/vertex-key.json:/app/vertex-key.json
+    ports:
+      - "8003:8003"
+    networks:
+      - edge_network
+
+  # Migration Service (Port 8004)
+  migration-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: migration_service
+    command: uvicorn migration_service.main:app --host 0.0.0.0 --port 8004
+    depends_on:
+      - db
+      - redis
+    environment:
+      - POSTGRES_SERVER=db
+      - REDIS_HOST=redis
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=HS256
+      - VERTEX_KEY_PATH=/app/vertex-key.json
+    volumes:
+      - ./backend/vertex-key.json:/app/vertex-key.json
+    ports:
+      - "8004:8004"
+    networks:
+      - edge_network
+
+  # BRD Generation Service (Port 8001)
+  brd-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: brd_service
+    command: uvicorn brd_service.main:app --host 0.0.0.0 --port 8001
+    depends_on:
+      - db
+      - redis
+    environment:
+      - POSTGRES_SERVER=db
+      - REDIS_HOST=redis
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=HS256
+      - VERTEX_KEY_PATH=/app/vertex-key.json
+    volumes:
+      - ./backend/vertex-key.json:/app/vertex-key.json
+    ports:
+      - "8001:8001"
+    networks:
+      - edge_network
+
+  # Proposal Generation Service (Port 8002)
+  proposal-service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: proposal_service
+    command: uvicorn proposal_service.main:app --host 0.0.0.0 --port 8002
+    depends_on:
+      - db
+      - redis
+    environment:
+      - POSTGRES_SERVER=db
+      - REDIS_HOST=redis
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=HS256
+      - VERTEX_KEY_PATH=/app/vertex-key.json
+    volumes:
+      - ./backend/vertex-key.json:/app/vertex-key.json
+    ports:
+      - "8002:8002"
+    networks:
+      - edge_network
+
+  # Production React Frontend
+  frontend:
+    build: ./frontend
+    container_name: edge_frontend
+    depends_on:
+      - auth-service
+    ports:
+      - "3000:80"
+    networks:
+      - edge_network
+
+networks:
+  edge_network:
+    driver: bridge
+
+volumes:
+  postgres_data:

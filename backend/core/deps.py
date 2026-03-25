@@ -21,7 +21,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        logging.error(f"JWT Validation Error: {e}")
         raise credentials_exception
 
     result = await db.execute(select(User).where(User.id == user_id))
