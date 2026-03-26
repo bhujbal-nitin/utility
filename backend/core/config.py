@@ -29,8 +29,8 @@ class Settings(BaseSettings):
     # Automation Service Storage (Outside backend to prevent hot-reload loops)
     AE_STUDIO_DATA_DIR: str = "../ae_studio_data"
     AI_STUDIO_DOWNLOADS_DIR: str = "../ae_studio_data/downloads"
-    AI_STUDIO_KB_FOLDER: str = "../ae_studio_data/knowledge"
-    AI_STUDIO_SYSTEM_PROMPT_PATH: str = "../ae_studio_data/knowledge/prompt.txt"
+    AI_STUDIO_KB_FOLDER: str = "automation_service/knowledge"
+    AI_STUDIO_SYSTEM_PROMPT_PATH: str = "automation_service/knowledge/prompt.txt"
     AI_STUDIO_SCRIPTS_DIR: str = "../ae_studio_data/scripts"
     AI_STUDIO_CARD_HELPER_DIR: str = "../ae_studio_data/card_helpers"
     AI_STUDIO_TEMPLATES_DIR: str = "../ae_studio_data/templates"

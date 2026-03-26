@@ -38,12 +38,21 @@ def _init_vertex():
 
     with open(s["system_prompt_path"], "r", encoding="utf-8") as f:
         sys_instruction = f.read()
+    print(f"DEBUG: System Instruction loaded from: {s['system_prompt_path']} ({len(sys_instruction)} chars)")
 
     kb_parts = []
-    for fname in sorted(os.listdir(s["kb_folder"])):
-        if fname.endswith((".py", ".json", ".md")):
-            with open(os.path.join(s["kb_folder"], fname), "r", encoding="utf-8") as f:
-                kb_parts.append(f"--- DOCUMENT: {fname} ---\n{f.read()}\n")
+    kb_folder = s["kb_folder"]
+    print(f"DEBUG: Loading KB from {kb_folder}")
+    if not os.path.exists(kb_folder):
+        print(f"DEBUG: KB folder does NOT exist!")
+    else:
+        for fname in sorted(os.listdir(kb_folder)):
+            fpath = os.path.join(kb_folder, fname)
+            if os.path.isfile(fpath):
+                print(f"DEBUG: Loading KB file: {fname}")
+                with open(fpath, "r", encoding="utf-8") as f:
+                    kb_parts.append(f"### [FILE: {fname}]\n{f.read()}\n")
+        print(f"DEBUG: Total KB files loaded: {len(kb_parts)}")
 
     model = GenerativeModel(
         s.get("vertex_model", "gemini-2.0-flash"),

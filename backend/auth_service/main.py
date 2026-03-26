@@ -18,7 +18,13 @@ app = FastAPI(title="Edge Assistant Auth Service", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://mspeventwin2.westus.cloudapp.azure.com",
+        "http://mspeventwin2.westus.cloudapp.azure.com:3000",
+        "https://mspeventwin2.westus.cloudapp.azure.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

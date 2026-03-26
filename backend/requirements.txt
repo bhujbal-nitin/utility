@@ -16,3 +16,8 @@ google-auth>=2.29.0
 flask>=3.0.0 # needed temporarily if some legacy templates/files request it, but we aim to remove
 pypdf>=4.0.0
 python-docx>=1.1.0
+# BRD Studio dependencies
+opencv-python-headless>=4.9.0
+scikit-image>=0.22.0
+reportlab>=4.1.0
+Pillow>=10.2.0
