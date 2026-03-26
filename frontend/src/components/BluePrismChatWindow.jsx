@@ -235,7 +235,7 @@ export default function BluePrismChatWindow({ tool, onBack }) {
             if (content) formData.append("prompt", content);
 
 
-            const res = await fetch("http://localhost:8004/api/migration/bp/analyze", {
+            const res = await fetch("/api/migration/bp/analyze", {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${token}` },
                 body: formData,

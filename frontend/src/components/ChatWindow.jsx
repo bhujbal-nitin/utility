@@ -124,7 +124,7 @@ function MessageBubble({ message, token }) {
 
   const handleDownload = async (filename) => {
     try {
-      const response = await fetch(`http://localhost:8003/download/${filename}`, {
+      const response = await fetch(`/download/${filename}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!response.ok) throw new Error("Download failed! Ensure you are authenticated.");
@@ -375,7 +375,7 @@ export default function ChatWindow({ tool, onBack }) {
       if (!currentSessionId) {
         isFirst = true;
         const startRes = await axios.post(
-          "http://localhost:8003/api/start",
+          "/api/start",
           { usecase_name: tool.id },
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -384,7 +384,7 @@ export default function ChatWindow({ tool, onBack }) {
       }
 
       // Call Chat SSE Endpoint manually with fetch to read stream
-      const response = await fetch("http://localhost:8003/api/chat", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

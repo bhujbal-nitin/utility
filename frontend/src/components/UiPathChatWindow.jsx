@@ -274,7 +274,7 @@ export default function UiPathChatWindow({ tool, onBack }) {
             if (content) formData.append("prompt", content);
 
 
-            const res = await fetch("http://localhost:8004/api/migration/uipath/analyze", {
+            const res = await fetch("/api/migration/uipath/analyze", {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${token}` },
                 body: formData,

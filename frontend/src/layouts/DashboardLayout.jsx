@@ -3,6 +3,7 @@ import { Box } from "@mui/material";
 import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow";
 import MigrationHomePage from "../components/MigrationHomePage";
+import BRDStudio from "../pages/BRDStudio";
 import WelcomeScreen from "../components/WelcomeScreen";
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
@@ -18,6 +19,19 @@ export default function DashboardLayout() {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
+  const renderMainContent = () => {
+    if (!activeTool) return <WelcomeScreen onSelectTool={setActiveTool} />;
+
+    switch (activeTool.id) {
+      case "brd":
+        return <BRDStudio onBack={() => setActiveTool(null)} />;
+      case "migration":
+        return <MigrationHomePage tool={activeTool} onBack={() => setActiveTool(null)} />;
+      default:
+        return <ChatWindow tool={activeTool} onBack={() => setActiveTool(null)} />;
+    }
+  };
 
   return (
     <Box
@@ -48,16 +62,9 @@ export default function DashboardLayout() {
           transition: "all 0.22s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
-        {activeTool ? (
-          activeTool.id === "migration" ? (
-             <MigrationHomePage tool={activeTool} onBack={() => setActiveTool(null)} />
-          ) : (
-             <ChatWindow tool={activeTool} onBack={() => setActiveTool(null)} />
-          )
-        ) : (
-          <WelcomeScreen onSelectTool={setActiveTool} />
-        )}
+        {renderMainContent()}
       </Box>
     </Box>
   );
 }
+

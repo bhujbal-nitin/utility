@@ -10,7 +10,7 @@ export const AuthProvider = ({ children }) => {
 
   // Configure axios instance
   const api = axios.create({
-    baseURL: "http://localhost:8000/api",
+    baseURL: "/api",
   });
 
   // Intercept requests to add token
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUser = useCallback(async (currentToken) => {
     try {
-      const res = await axios.get("http://localhost:8000/api/auth/me", {
+      const res = await axios.get("/api/auth/me", {
         headers: { Authorization: `Bearer ${currentToken}` }
       });
       setUser(res.data);
@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }) => {
     formData.append("username", email);
     formData.append("password", password);
 
-    const res = await axios.post("http://localhost:8000/api/auth/login", formData, {
+    const res = await axios.post("/api/auth/login", formData, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" }
     });
     
