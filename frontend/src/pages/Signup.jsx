@@ -3,6 +3,8 @@ import { Box, Typography, TextField, Button, CircularProgress, Container, Paper,
 import axios from "axios";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
 
+const AUTH_BASE_URL = "/api/auth";
+
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,7 +19,7 @@ export default function Signup() {
     setError("");
     setLoading(true);
     try {
-      await axios.post("/api/auth/register", {
+      await axios.post(`${AUTH_BASE_URL}/register`, {
         email,
         password,
         role

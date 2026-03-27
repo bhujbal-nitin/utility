@@ -7,13 +7,12 @@
  * - Custom capture upload with LLM processing gate
  */
 
-import React, { useState, useRef, useMemo, useCallback } from "react";
+import React, { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import {
   Box,
   Typography,
   Button,
   TextField,
-  Grid,
   Card,
   CardMedia,
   CardContent,
@@ -21,16 +20,21 @@ import {
   Tooltip,
   Switch,
   FormControlLabel,
-  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   CircularProgress,
   Divider,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Alert,
+  Grid,
 } from "@mui/material";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, rectSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
+import { SortableContext, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -40,6 +44,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import SaveIcon from "@mui/icons-material/Save";
 import CropIcon from "@mui/icons-material/Crop";
+import VideocamIcon from "@mui/icons-material/Videocam";
 import ImageEditor from "./ImageEditor";
 
 function SortableFrame({ cap, idx, onCrop, onEdit, onDelete, onToggleKeep, onPreview, apiBase }) {
@@ -57,7 +62,7 @@ function SortableFrame({ cap, idx, onCrop, onEdit, onDelete, onToggleKeep, onPre
   const imageUrl = cap.image_url ? `${apiBase}${cap.image_url}` : null;
 
   return (
-    <Grid item xs={6} sm={4} md={3} ref={setNodeRef} style={style}>
+    <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} ref={setNodeRef} style={style}>
       <Card
         sx={{
           bgcolor: "#fff",
@@ -75,8 +80,8 @@ function SortableFrame({ cap, idx, onCrop, onEdit, onDelete, onToggleKeep, onPre
           },
         }}
       >
-        <Box sx={{ position: "relative", width: "100%", pt: "56.25%", bgcolor: "#f0f2f5", cursor: "pointer" }} onClick={() => onPreview(imageUrl)}>
-          {imageUrl && (
+        <Box sx={{ position: "relative", width: "100%", pt: "58%", bgcolor: "#0b1322", cursor: imageUrl ? "pointer" : "default" }} onClick={() => imageUrl && onPreview(imageUrl)}>
+          {imageUrl ? (
             <CardMedia
               component="img"
               image={imageUrl}
@@ -90,6 +95,10 @@ function SortableFrame({ cap, idx, onCrop, onEdit, onDelete, onToggleKeep, onPre
                 objectFit: "contain" 
               }}
             />
+          ) : (
+            <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Typography variant="caption" sx={{ color: "#8fa3c0" }}>Preview unavailable</Typography>
+            </Box>
           )}
 
           {/* Drag Handle — top-left corner only */}
@@ -124,6 +133,9 @@ function SortableFrame({ cap, idx, onCrop, onEdit, onDelete, onToggleKeep, onPre
         </Box>
 
         <CardContent sx={{ p: 1.5, bgcolor: "#fff", "&:last-child": { pb: 1.5 } }}>
+          <Typography noWrap sx={{ color: "#0f172a", fontWeight: 700, fontSize: 12, mb: 0.6 }}>
+            {cap.label || `Frame ${idx + 1}`}
+          </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
              <Typography variant="caption" sx={{ color: "#4caf50", fontWeight: 700, fontSize: '10px' }}>
                ✓ Described
@@ -169,7 +181,13 @@ function SortableFrame({ cap, idx, onCrop, onEdit, onDelete, onToggleKeep, onPre
             />
             
             <Box sx={{ display: "flex", gap: 0.3 }}>
-              <Tooltip title="Crop/Annotate"><IconButton size="small" onClick={() => onCrop(cap)} sx={{ color: "#F26522", p: 0.4 }}><CropIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
+              <Tooltip title={imageUrl ? "Crop/Annotate" : "Image unavailable"}>
+                <span>
+                  <IconButton size="small" onClick={() => onCrop(cap)} disabled={!imageUrl} sx={{ color: "#F26522", p: 0.4 }}>
+                    <CropIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
               <Tooltip title="Delete"><IconButton size="small" onClick={() => onDelete(cap.id)} sx={{ color: "#ef4444", p: 0.4 }}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
             </Box>
           </Box>
@@ -196,9 +214,19 @@ export default function ReviewEdit({
   const [saving, setSaving] = useState(false);
   const [imageEditorCap, setImageEditorCap] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
+  const [videoDialogOpen, setVideoDialogOpen] = useState(false);
+  const [projectVideos, setProjectVideos] = useState([]);
+  const [selectedVideoId, setSelectedVideoId] = useState("");
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState("");
+  const [captureAtTime, setCaptureAtTime] = useState(0);
+  const [captureConfirmOpen, setCaptureConfirmOpen] = useState(false);
+  const [capturedFrameBlob, setCapturedFrameBlob] = useState(null);
+  const [capturedFramePreview, setCapturedFramePreview] = useState("");
+  const [captureError, setCaptureError] = useState("");
   const fileInputRef = useRef(null);
+  const videoRef = useRef(null);
 
-  const headers = { Authorization: `Bearer ${token}` };
+  const authHeaders = { Authorization: `Bearer ${token}` };
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   // Ordered IDs for sortable
@@ -219,7 +247,7 @@ export default function ReviewEdit({
     try {
       await fetch(`${apiBase}/api/brd/captures/${editingCapture.id}`, {
         method: "PUT",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({ description: editDescription, label: editLabel, ocr_text: editOcr }),
       });
       await refreshCaptures();
@@ -236,7 +264,7 @@ export default function ReviewEdit({
     try {
       await fetch(`${apiBase}/api/brd/captures/${cap.id}`, {
         method: "PUT",
-        headers: { ...headers, "Content-Type": "application/json" },
+        headers: { ...authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({ is_kept: !cap.is_kept }),
       });
       await refreshCaptures();
@@ -248,7 +276,7 @@ export default function ReviewEdit({
   // Delete capture
   const handleDeleteCapture = async (capId) => {
     try {
-      await fetch(`${apiBase}/api/brd/captures/${capId}`, { method: "DELETE", headers });
+      await fetch(`${apiBase}/api/brd/captures/${capId}`, { method: "DELETE", headers: authHeaders });
       await refreshCaptures();
     } catch (err) {
       console.error("Delete failed:", err);
@@ -257,28 +285,9 @@ export default function ReviewEdit({
 
   // Drag-and-drop reorder
   const handleDragEnd = async (event) => {
+    // Timestamp ordering is canonical; drag is disabled for sequence integrity.
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-
-    const oldIndex = captures.findIndex((c) => c.id === active.id);
-    const newIndex = captures.findIndex((c) => c.id === over.id);
-    const reordered = arrayMove(captures, oldIndex, newIndex);
-
-    // Update order on backend
-    try {
-      await Promise.all(
-        reordered.map((cap, idx) =>
-          fetch(`${apiBase}/api/brd/captures/${cap.id}`, {
-            method: "PUT",
-            headers: { ...headers, "Content-Type": "application/json" },
-            body: JSON.stringify({ order: idx + 1 }),
-          })
-        )
-      );
-      await refreshCaptures();
-    } catch (err) {
-      console.error("Reorder failed:", err);
-    }
   };
 
   // Custom upload
@@ -306,6 +315,91 @@ export default function ReviewEdit({
   };
 
   const keptCount = captures.filter((c) => c.is_kept).length;
+
+  useEffect(() => {
+    return () => {
+      if (capturedFramePreview) URL.revokeObjectURL(capturedFramePreview);
+    };
+  }, [capturedFramePreview]);
+
+  const loadProjectVideos = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/assets`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const videos = data?.videos || [];
+        setProjectVideos(videos);
+        if (videos.length > 0 && !selectedVideoId) {
+          setSelectedVideoId(videos[0].id);
+          setSelectedVideoUrl(videos[0].video_url ? `${apiBase}${videos[0].video_url}` : "");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load project videos:", err);
+    }
+  }, [projectId, apiBase, selectedVideoId, token]);
+
+  const openVideoDialog = async () => {
+    setVideoDialogOpen(true);
+    setCaptureError("");
+    await loadProjectVideos();
+  };
+
+  const handleVideoSelection = (videoId) => {
+    setSelectedVideoId(videoId);
+    const vid = projectVideos.find((v) => v.id === videoId);
+    setSelectedVideoUrl(vid?.video_url ? `${apiBase}${vid.video_url}` : "");
+  };
+
+  const captureCurrentFrame = async () => {
+    const v = videoRef.current;
+    if (!v || !selectedVideoId) return;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = v.videoWidth || 1280;
+      canvas.height = v.videoHeight || 720;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.97));
+      if (!blob) return;
+      if (capturedFramePreview) URL.revokeObjectURL(capturedFramePreview);
+      const previewUrl = URL.createObjectURL(blob);
+      setCapturedFrameBlob(blob);
+      setCapturedFramePreview(previewUrl);
+      setCaptureAtTime(v.currentTime || 0);
+      setCaptureConfirmOpen(true);
+    } catch (e) {
+      console.error("Frame capture failed", e);
+      setCaptureError("Failed to capture frame from video.");
+    }
+  };
+
+  const confirmCapturedFrame = async () => {
+    if (!capturedFrameBlob || !selectedVideoId) return;
+    try {
+      const formData = new FormData();
+      formData.append("image", capturedFrameBlob, `manual_capture_${Date.now()}.jpg`);
+      formData.append("label", `Manual Capture @ ${Math.round(captureAtTime)}s`);
+      formData.append("timestamp", String(captureAtTime));
+      formData.append("video_id", selectedVideoId);
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/captures`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) {
+        throw new Error("Upload failed");
+      }
+      setCaptureConfirmOpen(false);
+      await refreshCaptures();
+    } catch (e) {
+      console.error("Manual capture upload failed", e);
+      setCaptureError("Failed to add captured frame. Please retry.");
+    }
+  };
 
   return (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -335,6 +429,16 @@ export default function ReviewEdit({
           sx={{ borderColor: "rgba(242,101,34,0.5)", color: "#F26522" }}
         >
           Add Screenshot
+        </Button>
+
+        <Button
+          startIcon={<VideocamIcon />}
+          onClick={openVideoDialog}
+          size="small"
+          variant="outlined"
+          sx={{ borderColor: "rgba(31,56,100,0.45)", color: "#1F3864", bgcolor: "#fff" }}
+        >
+          Capture From Video
         </Button>
 
         <Button
@@ -447,6 +551,70 @@ export default function ReviewEdit({
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Popup Video Player for Manual Capture */}
+      <Dialog open={videoDialogOpen} onClose={() => setVideoDialogOpen(false)} maxWidth="lg" fullWidth>
+        <DialogTitle>Capture Additional Frame From Uploaded Video</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          {captureError && <Alert severity="error" sx={{ mb: 2 }}>{captureError}</Alert>}
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center", mb: 2 }}>
+            <FormControl size="small" sx={{ minWidth: 320 }}>
+              <InputLabel id="video-select-label">Select Video Asset</InputLabel>
+              <Select
+                labelId="video-select-label"
+                value={selectedVideoId}
+                label="Select Video Asset"
+                onChange={(e) => handleVideoSelection(e.target.value)}
+              >
+                {projectVideos.map((v) => (
+                  <MenuItem key={v.id} value={v.id}>
+                    {v.filename} ({v.status})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
+              Move to desired timestamp and click Capture Current Frame.
+            </Typography>
+          </Box>
+          <Box sx={{ bgcolor: "#000", borderRadius: 1, overflow: "hidden" }}>
+            {selectedVideoUrl ? (
+              <video
+                ref={videoRef}
+                src={selectedVideoUrl}
+                controls
+                style={{ width: "100%", maxHeight: "62vh", display: "block" }}
+                onTimeUpdate={(e) => setCaptureAtTime(e.currentTarget.currentTime || 0)}
+              />
+            ) : (
+              <Box sx={{ p: 4, textAlign: "center", color: "#fff" }}>No video selected.</Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setVideoDialogOpen(false)}>Close</Button>
+          <Button variant="contained" onClick={captureCurrentFrame} disabled={!selectedVideoUrl}>
+            Capture Current Frame
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirm Captured Frame */}
+      <Dialog open={captureConfirmOpen} onClose={() => setCaptureConfirmOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Add Captured Frame?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 1.5 }}>
+            Timestamp: <strong>{Math.round(captureAtTime)}s</strong>. This frame will be auto-processed, sorted by timestamp, and AI-described.
+          </Typography>
+          {capturedFramePreview && (
+            <img src={capturedFramePreview} alt="Captured preview" style={{ width: "100%", borderRadius: 8 }} />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCaptureConfirmOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={confirmCapturedFrame}>Yes, Add Frame</Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

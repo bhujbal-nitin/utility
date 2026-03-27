@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     AI_STUDIO_TEMPLATES_DIR: str = "../ae_studio_data/templates"
     AI_STUDIO_HOOKS_DIR: str = "../ae_studio_data/hooks"
 
+    # Enterprise DOCX editor integration (OnlyOffice/Collabora compatible scaffold)
+    DOCX_EDITOR_ENABLED: bool = False
+    DOCX_EDITOR_URL: str = ""  # e.g. https://docs.example.com/web-apps/apps/documenteditor/main/index.html
+    DOCX_EDITOR_PUBLIC_BASE_URL: str = ""  # public base URL of this app, e.g. https://mspeventwin2.westus.cloudapp.azure.com
+    DOCX_EDITOR_JWT_SECRET: str = ""
+
+    # BRD capture/description performance tuning
+    BRD_MAX_CAPTURE_FRAMES: int = 36
+    BRD_MIN_CAPTURE_INTERVAL_SEC: float = 1.5
+    BRD_LLM_FRAME_CONCURRENCY: int = 6
+    BRD_LLM_MAX_OUTPUT_TOKENS: int = 1024
+
     @property
     def async_database_url(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

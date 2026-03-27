@@ -11,14 +11,20 @@ import shutil
 import logging
 import asyncio
 import tempfile
+import time
+import json as json_mod
+from urllib.parse import quote_plus
 from pathlib import Path
 from typing import Optional, List
+from collections import defaultdict, deque
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 from pydantic import BaseModel
+from jose import jwt
 
 from core.db import get_db
 from core.deps import RequireRole
@@ -33,6 +39,7 @@ from brd_service.frame_describer import frame_describer
 from brd_service.brd_pipeline import brd_pipeline
 from brd_service.export_service import ExportService
 from brd_service.extract_utils import extract_text_from_file
+from brd_service.video_processor import postprocess_frames
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +57,31 @@ for d in [BRD_VIDEOS_DIR, BRD_FRAMES_DIR, BRD_EXPORTS_DIR, BRD_DOCS_DIR]:
 
 # Auth dependency
 brd_role = RequireRole([RoleEnum.BA, RoleEnum.ADMIN])
+
+_RATE_LIMIT_BUCKETS = defaultdict(deque)
+
+
+def _rate_limit_or_429(user_id: str, action: str, limit: int, window_sec: int) -> None:
+    """Simple in-memory per-user rate limit guard."""
+    key = f"{action}:{user_id}"
+    now = time.time()
+    q = _RATE_LIMIT_BUCKETS[key]
+    while q and (now - q[0]) > window_sec:
+        q.popleft()
+    if len(q) >= limit:
+        raise HTTPException(status_code=429, detail=f"Rate limit exceeded for {action}. Try again shortly.")
+    q.append(now)
+
+
+def _assert_safe_file_upload(file: UploadFile, allowed_ext: set[str], max_size_mb: int = 500) -> None:
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Missing upload file.")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in allowed_ext:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix}")
+    # Content length isn't guaranteed here, so size validation is best-effort at ingress.
+    # Keep hard cap via reverse proxy (Nginx) too.
+    # This guard remains intentionally lightweight for streamed uploads.
 
 
 # ─── Pydantic Schemas ────────────────────────────────────────────────────────
@@ -86,6 +118,19 @@ class CaptureUpdate(BaseModel):
     edits_json: Optional[dict] = None
     is_kept: Optional[bool] = None
     order: Optional[int] = None
+
+
+class TranscriptOnlyUpload(BaseModel):
+    transcript: str
+    source_name: Optional[str] = None
+
+
+class EditorCallbackPayload(BaseModel):
+    status: Optional[int] = None
+    key: Optional[str] = None
+    url: Optional[str] = None
+    users: Optional[List[str]] = None
+    token: Optional[str] = None
 
 
 # ─── Projects ────────────────────────────────────────────────────────────────
@@ -180,6 +225,11 @@ async def upload_video(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload video, save, trigger intelligent capture + LLM descriptions in background."""
+    _rate_limit_or_429(user.id, "upload_video", limit=20, window_sec=300)
+    _assert_safe_file_upload(video, allowed_ext={".mp4", ".mov", ".mkv", ".avi", ".webm"})
+    if transcript_file:
+        _assert_safe_file_upload(transcript_file, allowed_ext={".txt", ".pdf", ".docx"})
+
     project = await _get_project_or_404(db, project_id, user.id)
 
     # Save video file
@@ -217,9 +267,7 @@ async def upload_video(
             full_transcript = extracted
 
     # Parse transcript segments
-    segments = []
-    if full_transcript:
-        segments = [{"start": 0, "end": 0, "text": full_transcript, "speaker": None}]
+    segments = _parse_transcript_segments(full_transcript, duration=duration) if full_transcript else []
 
     video_record = BrdVideo(
         id=video_id,
@@ -228,7 +276,7 @@ async def upload_video(
         path=video_path,
         duration=duration,
         order=max_order + 1,
-        transcript_text=transcript or "",
+        transcript_text=full_transcript or "",
         transcript_segments=segments,
         status="processing",
     )
@@ -259,6 +307,7 @@ async def upload_transcript(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload/paste transcript and link to a video."""
+    _rate_limit_or_429(user.id, "upload_transcript", limit=30, window_sec=300)
     await _get_project_or_404(db, project_id, user.id)
 
     result = await db.execute(
@@ -269,10 +318,103 @@ async def upload_transcript(
         raise HTTPException(status_code=404, detail="Video not found")
 
     video.transcript_text = transcript
-    # Simple segment: whole transcript as one block
-    video.transcript_segments = [{"start": 0, "end": video.duration, "text": transcript, "speaker": None}]
+    video.transcript_segments = _parse_transcript_segments(transcript, duration=video.duration)
     await db.commit()
     return {"updated": True, "video_id": video_id}
+
+
+@router.delete("/projects/{project_id}/videos/{video_id}")
+async def delete_video_asset(
+    project_id: str,
+    video_id: str,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a video asset and its linked captures/files."""
+    _rate_limit_or_429(user.id, "delete_video_asset", limit=60, window_sec=300)
+    await _get_project_or_404(db, project_id, user.id)
+
+    result = await db.execute(
+        select(BrdVideo).where(BrdVideo.id == video_id, BrdVideo.project_id == project_id)
+    )
+    video = result.scalar_one_or_none()
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    cap_result = await db.execute(
+        select(BrdCapture).where(
+            BrdCapture.project_id == project_id,
+            BrdCapture.video_id == video_id,
+        )
+    )
+    linked_captures = cap_result.scalars().all()
+    deleted_capture_count = 0
+    for cap in linked_captures:
+        for p in [cap.image_path, cap.preview_image_path]:
+            if p and os.path.exists(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+        await db.delete(cap)
+        deleted_capture_count += 1
+
+    if video.path and os.path.exists(video.path):
+        try:
+            os.remove(video.path)
+        except OSError:
+            pass
+
+    await db.delete(video)
+    await db.commit()
+    return {"deleted": True, "video_id": video_id, "deleted_captures": deleted_capture_count}
+
+
+@router.post("/projects/{project_id}/transcript-only")
+async def upload_transcript_only(
+    project_id: str,
+    body: TranscriptOnlyUpload,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Transcript-only ingestion mode for BRD generation without a video file.
+    Creates a synthetic video evidence record with transcript payload.
+    """
+    _rate_limit_or_429(user.id, "upload_transcript_only", limit=30, window_sec=300)
+    await _get_project_or_404(db, project_id, user.id)
+    transcript = (body.transcript or "").strip()
+    if not transcript:
+        raise HTTPException(status_code=400, detail="Transcript text is required.")
+
+    result = await db.execute(
+        select(func.max(BrdVideo.order)).where(BrdVideo.project_id == project_id)
+    )
+    max_order = result.scalar() or 0
+
+    video_id = str(uuid.uuid4())
+    source_name = (body.source_name or "Transcript Only Input").strip() or "Transcript Only Input"
+    segments = _parse_transcript_segments(transcript, duration=0.0)
+    synthetic = BrdVideo(
+        id=video_id,
+        project_id=project_id,
+        filename=f"{source_name}.txt",
+        path="",
+        duration=0.0,
+        order=max_order + 1,
+        transcript_text=transcript,
+        transcript_segments=segments,
+        status="ready",
+    )
+    db.add(synthetic)
+    await db.commit()
+    await db.refresh(synthetic)
+    return {
+        "video_id": synthetic.id,
+        "filename": synthetic.filename,
+        "status": synthetic.status,
+        "mode": "transcript_only",
+    }
 
 
 # ─── Captures ─────────────────────────────────────────────────────────────────
@@ -287,7 +429,7 @@ async def list_captures(
     result = await db.execute(
         select(BrdCapture)
         .where(BrdCapture.project_id == project_id)
-        .order_by(BrdCapture.order.asc(), BrdCapture.timestamp.asc())
+        .order_by(BrdCapture.timestamp.asc(), BrdCapture.id.asc())
     )
     captures = result.scalars().all()
     return [_capture_to_dict(c) for c in captures]
@@ -299,10 +441,14 @@ async def add_custom_capture(
     background_tasks: BackgroundTasks,
     image: UploadFile = File(...),
     label: str = Form("Custom Screenshot"),
+    timestamp: Optional[float] = Form(None),
+    video_id: Optional[str] = Form(None),
     user: User = Depends(brd_role),
     db: AsyncSession = Depends(get_db),
 ):
     """Upload a custom screenshot — triggers LLM description."""
+    _rate_limit_or_429(user.id, "add_custom_capture", limit=120, window_sec=300)
+    _assert_safe_file_upload(image, allowed_ext={".jpg", ".jpeg", ".png", ".webp"})
     await _get_project_or_404(db, project_id, user.id)
 
     # Save image
@@ -316,20 +462,47 @@ async def add_custom_capture(
     with open(img_path, "wb") as f:
         f.write(await image.read())
 
-    # Get max order
-    result = await db.execute(
-        select(func.max(BrdCapture.order)).where(BrdCapture.project_id == project_id)
+    # Apply the same Teams cleanup pipeline for manual uploads.
+    ts_val = float(timestamp) if timestamp is not None else 0.0
+    processed = await postprocess_frames(
+        [{"filename": img_name, "path": img_path, "timestamp": ts_val}]
     )
-    max_order = result.scalar() or 0
+    if not processed:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded frame appears to be a Teams gallery/shell frame and was filtered out.",
+        )
+    frame_meta = processed[0]
+
+    # Insert in stable timestamp order when provided; otherwise append.
+    existing_result = await db.execute(
+        select(BrdCapture)
+        .where(BrdCapture.project_id == project_id)
+        .order_by(BrdCapture.order.asc(), BrdCapture.timestamp.asc(), BrdCapture.id.asc())
+    )
+    existing_caps = existing_result.scalars().all()
+    ts_val = float(timestamp) if timestamp is not None else None
+    if ts_val is None:
+        insert_pos = len(existing_caps)
+    else:
+        insert_pos = 0
+        for i, cap in enumerate(existing_caps):
+            if float(cap.timestamp or 0.0) <= ts_val:
+                insert_pos = i + 1
+    for cap in existing_caps[insert_pos:]:
+        cap.order = int(cap.order or 0) + 1
 
     capture = BrdCapture(
         id=capture_id,
         project_id=project_id,
+        video_id=video_id,
         image_path=img_path,
-        order=max_order + 1,
+        timestamp=ts_val or 0.0,
+        order=insert_pos + 1,
         label=label,
         is_custom=True,
         llm_status="processing",
+        edits_json={"auto_crop": frame_meta.get("auto_crop")} if frame_meta.get("auto_crop") else {},
     )
     db.add(capture)
     await db.commit()
@@ -349,10 +522,9 @@ async def update_capture_image(
     db: AsyncSession = Depends(get_db),
 ):
     """Overwrite a capture's image file (e.g., after crop/annotate)."""
-    result = await db.execute(select(BrdCapture).where(BrdCapture.id == capture_id))
-    capture = result.scalar_one_or_none()
-    if not capture:
-        raise HTTPException(status_code=404, detail="Capture not found")
+    _rate_limit_or_429(user.id, "update_capture_image", limit=120, window_sec=300)
+    _assert_safe_file_upload(image, allowed_ext={".jpg", ".jpeg", ".png", ".webp"})
+    capture = await _get_capture_for_user_or_404(db, capture_id, user.id)
 
     # Save over existing path if it exists, or create new one
     if not capture.image_path:
@@ -375,12 +547,13 @@ async def update_capture(
     db: AsyncSession = Depends(get_db),
 ):
     """Update capture metadata, description, or edits."""
-    result = await db.execute(select(BrdCapture).where(BrdCapture.id == capture_id))
-    capture = result.scalar_one_or_none()
-    if not capture:
-        raise HTTPException(status_code=404, detail="Capture not found")
+    _rate_limit_or_429(user.id, "update_capture", limit=300, window_sec=300)
+    capture = await _get_capture_for_user_or_404(db, capture_id, user.id)
 
-    for field, value in body.model_dump(exclude_unset=True).items():
+    update_data = body.model_dump(exclude_unset=True)
+    # Timestamp ordering is canonical; ignore drag/drop order mutations.
+    update_data.pop("order", None)
+    for field, value in update_data.items():
         setattr(capture, field, value)
     await db.commit()
     await db.refresh(capture)
@@ -393,10 +566,8 @@ async def delete_capture(
     user: User = Depends(brd_role),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(BrdCapture).where(BrdCapture.id == capture_id))
-    capture = result.scalar_one_or_none()
-    if not capture:
-        raise HTTPException(status_code=404, detail="Capture not found")
+    _rate_limit_or_429(user.id, "delete_capture", limit=80, window_sec=300)
+    capture = await _get_capture_for_user_or_404(db, capture_id, user.id)
 
     # Cleanup image file
     if capture.image_path and os.path.exists(capture.image_path):
@@ -438,10 +609,8 @@ async def save_section(
     ATOMIC SAVE + VERSION SNAPSHOT.
     Fixes BRDCopilot bug: every save creates a version in the same transaction.
     """
-    result = await db.execute(select(BrdSection).where(BrdSection.id == section_id))
-    section = result.scalar_one_or_none()
-    if not section:
-        raise HTTPException(status_code=404, detail="Section not found")
+    _rate_limit_or_429(user.id, "save_section", limit=500, window_sec=300)
+    section = await _get_section_for_user_or_404(db, section_id, user.id)
 
     # Create version snapshot BEFORE updating content
     version = BrdVersion(
@@ -470,9 +639,10 @@ async def list_section_versions(
     user: User = Depends(brd_role),
     db: AsyncSession = Depends(get_db),
 ):
+    section = await _get_section_for_user_or_404(db, section_id, user.id)
     result = await db.execute(
         select(BrdVersion)
-        .where(BrdVersion.section_id == section_id)
+        .where(BrdVersion.section_id == section.id)
         .order_by(desc(BrdVersion.version_number))
         .limit(20)
     )
@@ -496,10 +666,8 @@ async def restore_section_version(
     db: AsyncSession = Depends(get_db),
 ):
     """Restore a section to a previous version."""
-    result = await db.execute(select(BrdSection).where(BrdSection.id == section_id))
-    section = result.scalar_one_or_none()
-    if not section:
-        raise HTTPException(status_code=404, detail="Section not found")
+    _rate_limit_or_429(user.id, "restore_section_version", limit=80, window_sec=300)
+    section = await _get_section_for_user_or_404(db, section_id, user.id)
 
     ver_result = await db.execute(
         select(BrdVersion).where(BrdVersion.id == version_id, BrdVersion.section_id == section_id)
@@ -532,10 +700,8 @@ async def refine_section(
     db: AsyncSession = Depends(get_db),
 ):
     """AI refine a specific section with user instruction."""
-    result = await db.execute(select(BrdSection).where(BrdSection.id == section_id))
-    section = result.scalar_one_or_none()
-    if not section:
-        raise HTTPException(status_code=404, detail="Section not found")
+    _rate_limit_or_429(user.id, "refine_section", limit=60, window_sec=300)
+    section = await _get_section_for_user_or_404(db, section_id, user.id)
 
     # Snapshot current content before refinement
     version = BrdVersion(
@@ -569,18 +735,33 @@ async def generate_brd(
     db: AsyncSession = Depends(get_db),
 ):
     """Generate BRD using the knowledge-graph V2 pipeline."""
+    _rate_limit_or_429(user.id, "generate_brd", limit=10, window_sec=300)
     project = await _get_project_or_404(db, project_id, user.id)
 
-    # Validate: need captures
+    # Validate: need evidence (captures OR transcript/docs)
     cap_result = await db.execute(
         select(func.count(BrdCapture.id))
         .where(BrdCapture.project_id == project_id, BrdCapture.is_kept == True)
     )
     cap_count = cap_result.scalar() or 0
-    if cap_count == 0:
+    transcript_result = await db.execute(
+        select(func.count(BrdVideo.id)).where(
+            BrdVideo.project_id == project_id,
+            func.length(func.trim(BrdVideo.transcript_text)) > 0,
+        )
+    )
+    transcript_count = transcript_result.scalar() or 0
+    doc_result = await db.execute(
+        select(func.count(BrdDocument.id)).where(
+            BrdDocument.project_id == project_id,
+            func.length(func.trim(BrdDocument.extracted_text)) > 0,
+        )
+    )
+    doc_count = doc_result.scalar() or 0
+    if cap_count == 0 and transcript_count == 0 and doc_count == 0:
         raise HTTPException(
             status_code=400,
-            detail="No captures found. Upload a video or add screenshots first."
+            detail="No usable evidence found. Upload captures, transcript, or supporting documents first."
         )
 
     # Update project status
@@ -594,6 +775,8 @@ async def generate_brd(
         "message": "BRD generation started",
         "project_id": project_id,
         "captures": cap_count,
+        "transcripts": transcript_count,
+        "documents": doc_count,
         "status": "generating",
     }
 
@@ -606,6 +789,7 @@ async def export_brd(
     db: AsyncSession = Depends(get_db),
 ):
     """Export BRD as DOCX or PDF. READS LATEST PERSISTED CONTENT (bug fix)."""
+    _rate_limit_or_429(user.id, "export_brd", limit=20, window_sec=300)
     project = await _get_project_or_404(db, project_id, user.id)
 
     # Fetch all sections (latest persisted content from DB)
@@ -663,6 +847,8 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload additional reference documents."""
+    _rate_limit_or_429(user.id, "upload_document", limit=40, window_sec=300)
+    _assert_safe_file_upload(file, allowed_ext={".txt", ".pdf", ".docx"})
     await _get_project_or_404(db, project_id, user.id)
 
     docs_dir = os.path.join(BRD_DOCS_DIR, project_id)
@@ -673,11 +859,8 @@ async def upload_document(
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
-    # Extract text (basic for now)
-    extracted = ""
-    if file.filename.endswith(".txt"):
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            extracted = f.read()
+    # Extract text from txt/pdf/docx
+    extracted = await extract_text_from_file(file_path) or ""
 
     doc = BrdDocument(
         id=doc_id,
@@ -693,6 +876,32 @@ async def upload_document(
     return {"id": doc.id, "filename": doc.filename, "extracted_length": len(extracted)}
 
 
+@router.delete("/projects/{project_id}/documents/{document_id}")
+async def delete_document_asset(
+    project_id: str,
+    document_id: str,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a supporting document asset."""
+    _rate_limit_or_429(user.id, "delete_document_asset", limit=80, window_sec=300)
+    await _get_project_or_404(db, project_id, user.id)
+    result = await db.execute(
+        select(BrdDocument).where(BrdDocument.id == document_id, BrdDocument.project_id == project_id)
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.path and os.path.exists(doc.path):
+        try:
+            os.remove(doc.path)
+        except OSError:
+            pass
+    await db.delete(doc)
+    await db.commit()
+    return {"deleted": True, "document_id": document_id}
+
+
 # ─── Capture Preview (Crop/Annotate) ─────────────────────────────────────────
 
 @router.post("/captures/{capture_id}/preview")
@@ -704,10 +913,9 @@ async def upload_capture_preview(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload a cropped/annotated preview image for a capture."""
-    result = await db.execute(select(BrdCapture).where(BrdCapture.id == capture_id))
-    capture = result.scalar_one_or_none()
-    if not capture:
-        raise HTTPException(status_code=404, detail="Capture not found")
+    _rate_limit_or_429(user.id, "upload_capture_preview", limit=120, window_sec=300)
+    _assert_safe_file_upload(preview, allowed_ext={".jpg", ".jpeg", ".png", ".webp"})
+    capture = await _get_capture_for_user_or_404(db, capture_id, user.id)
 
     # Save preview image
     frames_dir = os.path.join(BRD_FRAMES_DIR, capture.project_id)
@@ -720,7 +928,6 @@ async def upload_capture_preview(
 
     capture.preview_image_path = preview_path
     if crop_region:
-        import json as json_mod
         capture.edits_json = {**(capture.edits_json or {}), "crop_region": json_mod.loads(crop_region)}
 
     await db.commit()
@@ -750,6 +957,7 @@ async def regenerate_brd(
 
     If body.sections is provided, only those section_keys are regenerated.
     """
+    _rate_limit_or_429(user.id, "regenerate_brd", limit=20, window_sec=300)
     project = await _get_project_or_404(db, project_id, user.id)
 
     # Clear manual_override flags so regeneration actually updates content
@@ -829,11 +1037,317 @@ async def get_project_status(
     }
 
 
+@router.get("/projects/{project_id}/assets")
+async def list_project_assets(
+    project_id: str,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Unified asset view for Step 1/2/3 panels."""
+    await _get_project_or_404(db, project_id, user.id)
+    videos = (
+        await db.execute(
+            select(BrdVideo).where(BrdVideo.project_id == project_id).order_by(BrdVideo.order.asc(), BrdVideo.created_at.asc())
+        )
+    ).scalars().all()
+    docs = (
+        await db.execute(
+            select(BrdDocument).where(BrdDocument.project_id == project_id).order_by(BrdDocument.created_at.asc())
+        )
+    ).scalars().all()
+    captures = (
+        await db.execute(
+            select(BrdCapture)
+            .where(BrdCapture.project_id == project_id)
+            .order_by(BrdCapture.timestamp.asc(), BrdCapture.id.asc())
+        )
+    ).scalars().all()
+    return {
+        "videos": [
+            {
+                "id": v.id,
+                "filename": v.filename,
+                "status": v.status,
+                "duration": v.duration,
+                "has_transcript": bool((v.transcript_text or "").strip()),
+                "video_url": f"/api/brd/videos/{project_id}/{Path(v.path).name}" if v.path else None,
+                "created_at": v.created_at.isoformat() if v.created_at else None,
+            }
+            for v in videos
+        ],
+        "documents": [
+            {
+                "id": d.id,
+                "filename": d.filename,
+                "has_text": bool((d.extracted_text or "").strip()),
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in docs
+        ],
+        "captures": [_capture_to_dict(c) for c in captures],
+    }
+
+
+@router.get("/projects/{project_id}/regeneration-recommendation")
+async def regeneration_recommendation(
+    project_id: str,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns whether a regenerate suggestion should be shown, and why.
+    This is conservative and user-facing; it avoids false negatives.
+    """
+    project = await _get_project_or_404(db, project_id, user.id)
+    videos = (
+        await db.execute(select(BrdVideo).where(BrdVideo.project_id == project_id))
+    ).scalars().all()
+    docs = (
+        await db.execute(select(BrdDocument).where(BrdDocument.project_id == project_id))
+    ).scalars().all()
+    captures = (
+        await db.execute(select(BrdCapture).where(BrdCapture.project_id == project_id, BrdCapture.is_kept == True))
+    ).scalars().all()
+    sections_count = (
+        await db.execute(select(func.count(BrdSection.id)).where(BrdSection.project_id == project_id))
+    ).scalar() or 0
+
+    reasons: List[str] = []
+    if sections_count == 0:
+        reasons.append("No BRD sections generated yet.")
+    if any(v.status != "ready" for v in videos):
+        reasons.append("Some uploaded videos are still processing.")
+    if any(c.llm_status in ("pending", "processing") for c in captures):
+        reasons.append("Some captures are still being analyzed.")
+    if any(not (v.transcript_text or "").strip() for v in videos):
+        reasons.append("One or more videos do not have transcript text yet.")
+    if any(not (d.extracted_text or "").strip() for d in docs):
+        reasons.append("One or more supporting documents have no extracted text yet.")
+    if project.status in ("draft", "in_review") and captures:
+        reasons.append("New or updated evidence may improve section quality.")
+
+    return {
+        "should_regenerate": bool(reasons),
+        "reasons": reasons,
+        "project_status": project.status,
+        "counts": {
+            "videos": len(videos),
+            "documents": len(docs),
+            "captures_kept": len(captures),
+            "sections": sections_count,
+        },
+    }
+
+
+@router.post("/projects/{project_id}/editor/session")
+async def create_editor_session(
+    project_id: str,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Create enterprise DOCX editor session config.
+    This is a secure scaffold for OnlyOffice/Collabora style embedding.
+    """
+    _rate_limit_or_429(user.id, "editor_session", limit=60, window_sec=300)
+    project = await _get_project_or_404(db, project_id, user.id)
+
+    # Generate latest canonical docx from template mapping.
+    result = await db.execute(select(BrdSection).where(BrdSection.project_id == project_id))
+    sections = result.scalars().all()
+    if not sections:
+        raise HTTPException(status_code=400, detail="No BRD sections found. Generate BRD first.")
+    caps = (
+        await db.execute(select(BrdCapture).where(BrdCapture.project_id == project_id, BrdCapture.is_kept == True))
+    ).scalars().all()
+    export_svc = ExportService(BRD_FRAMES_DIR, BRD_EXPORTS_DIR)
+    meta = {
+        "client_name": project.client_name,
+        "process_name": project.process_name,
+        "ba_name": project.ba_name,
+    }
+    file_path = await export_svc.export_docx_from_template(
+        project.name,
+        [_section_to_dict(s) for s in sections],
+        [_capture_to_dict(c) for c in caps],
+        meta,
+    )
+    rel_path = os.path.relpath(file_path, BRD_EXPORTS_DIR).replace(os.sep, "/")
+    # Use configured public base URL if available, otherwise assume same host.
+    public_base = (settings.DOCX_EDITOR_PUBLIC_BASE_URL or "").rstrip("/")
+    file_url = f"{public_base}/api/brd/exports/{rel_path}" if public_base else f"/api/brd/exports/{rel_path}"
+
+    if not settings.DOCX_EDITOR_ENABLED or not settings.DOCX_EDITOR_URL:
+        return {
+            "enabled": False,
+            "message": "Enterprise DOCX editor is not enabled in server config.",
+            "file_url": file_url,
+            "download_url": f"/api/brd/exports/{rel_path}",
+        }
+
+    doc_key = f"{project_id}:{int(time.time())}"
+    callback_url = f"{public_base}/api/brd/projects/{project_id}/editor/callback" if public_base else f"/api/brd/projects/{project_id}/editor/callback"
+    callback_token = ""
+    payload = {
+        "project_id": project_id,
+        "user_id": user.id,
+        "email": user.email,
+        "doc_key": doc_key,
+    }
+    token = ""
+    if settings.DOCX_EDITOR_JWT_SECRET:
+        token = jwt.encode(payload, settings.DOCX_EDITOR_JWT_SECRET, algorithm="HS256")
+        callback_token = jwt.encode(
+            {
+                "project_id": project_id,
+                "doc_key": doc_key,
+                "purpose": "editor_callback",
+            },
+            settings.DOCX_EDITOR_JWT_SECRET,
+            algorithm="HS256",
+        )
+        callback_url = f"{callback_url}?token={quote_plus(callback_token)}"
+
+    external_url = (
+        f"{settings.DOCX_EDITOR_URL}"
+        f"?fileUrl={quote_plus(file_url)}"
+        f"&title={quote_plus(project.name or 'BRD')}"
+        f"&callbackUrl={quote_plus(callback_url)}"
+    )
+    if token:
+        external_url += f"&token={quote_plus(token)}"
+
+    return {
+        "enabled": True,
+        "editor_url": external_url,
+        "file_url": file_url,
+        "callback_url": callback_url,
+        "doc_key": doc_key,
+        "token": token,
+        "callback_token": callback_token,
+    }
+
+
+@router.post("/projects/{project_id}/editor/callback")
+async def editor_callback(
+    project_id: str,
+    body: EditorCallbackPayload,
+    token: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Placeholder callback endpoint for enterprise editor save events.
+    Safe scaffold: logs callback details for audit.
+    """
+    prj = await db.execute(select(BrdProject).where(BrdProject.id == project_id))
+    project = prj.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if settings.DOCX_EDITOR_JWT_SECRET:
+        provided_token = token or body.token
+        if not provided_token:
+            raise HTTPException(status_code=401, detail="Missing callback token")
+        try:
+            decoded = jwt.decode(
+                provided_token,
+                settings.DOCX_EDITOR_JWT_SECRET,
+                algorithms=["HS256"],
+            )
+            if (
+                decoded.get("purpose") != "editor_callback"
+                or decoded.get("project_id") != project_id
+            ):
+                raise HTTPException(status_code=401, detail="Invalid callback token")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=401, detail="Invalid callback token")
+
+    save_statuses = {2, 6}
+    if body.status in save_statuses and body.url:
+        try:
+            docs_dir = os.path.join(BRD_DOCS_DIR, project_id, "editor")
+            os.makedirs(docs_dir, exist_ok=True)
+            timestamp = int(time.time())
+            saved_name = f"edited_brd_{timestamp}.docx"
+            saved_path = os.path.join(docs_dir, saved_name)
+
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                resp = await client.get(body.url)
+                resp.raise_for_status()
+                with open(saved_path, "wb") as f:
+                    f.write(resp.content)
+
+            edited_doc = BrdDocument(
+                id=str(uuid.uuid4()),
+                project_id=project_id,
+                filename=saved_name,
+                path=saved_path,
+                extracted_text="",
+            )
+            db.add(edited_doc)
+            project.status = "draft"
+            await db.commit()
+            logger.info("Editor callback saved updated DOCX for project=%s path=%s", project_id, saved_path)
+        except Exception as e:
+            logger.error("Editor callback failed to persist DOCX for project=%s: %s", project_id, e, exc_info=True)
+            return {"error": 1}
+    logger.info(
+        "Editor callback received project=%s status=%s key=%s url=%s",
+        project_id,
+        body.status,
+        body.key,
+        bool(body.url),
+    )
+    return {"error": 0}
+
+
+@router.get("/projects/{project_id}/editor/latest")
+async def get_latest_editor_doc(
+    project_id: str,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_project_or_404(db, project_id, user.id)
+    editor_dir = os.path.join(BRD_DOCS_DIR, project_id, "editor")
+    if not os.path.isdir(editor_dir):
+        return {"found": False}
+    candidates = [
+        os.path.join(editor_dir, name)
+        for name in os.listdir(editor_dir)
+        if name.lower().endswith(".docx")
+    ]
+    if not candidates:
+        return {"found": False}
+    latest = max(candidates, key=os.path.getmtime)
+    return {
+        "found": True,
+        "filename": os.path.basename(latest),
+        "download_url": f"/api/brd/documents/{project_id}/editor/{os.path.basename(latest)}",
+    }
+
+
+@router.get("/documents/{project_id}/editor/{filename}")
+async def serve_editor_document(project_id: str, filename: str):
+    if Path(filename).name != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if Path(project_id).name != project_id:
+        raise HTTPException(status_code=400, detail="Invalid project id")
+    path = os.path.join(BRD_DOCS_DIR, project_id, "editor", filename)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Document not found")
+    return FileResponse(path, filename=filename)
+
+
 # ─── Static File Serving (Frames & Exports) ──────────────────────────────────
 
 @router.get("/frames/{project_id}/{filename}")
 async def serve_frame(project_id: str, filename: str):
     """Serve captured frame images with subdirectory and legacy root fallback."""
+    if Path(filename).name != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if Path(project_id).name != project_id:
+        raise HTTPException(status_code=400, detail="Invalid project id")
     base = os.path.join(BRD_FRAMES_DIR, project_id)
     candidates = [os.path.join(base, filename)]
 
@@ -852,9 +1366,25 @@ async def serve_frame(project_id: str, filename: str):
     raise HTTPException(status_code=404, detail="Frame not found")
 
 
+@router.get("/videos/{project_id}/{filename}")
+async def serve_video(project_id: str, filename: str):
+    """Serve uploaded source videos for in-app preview/manual capture."""
+    if Path(filename).name != filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if Path(project_id).name != project_id:
+        raise HTTPException(status_code=400, detail="Invalid project id")
+    video_dir = os.path.join(BRD_VIDEOS_DIR, project_id)
+    path = os.path.join(video_dir, filename)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Video not found")
+    return FileResponse(path)
+
+
 @router.get("/exports/{project_name}/{filename}")
 async def serve_export(project_name: str, filename: str):
     """Serve exported DOCX/PDF files."""
+    if Path(filename).name != filename or Path(project_name).name != project_name:
+        raise HTTPException(status_code=400, detail="Invalid export path")
     path = os.path.join(BRD_EXPORTS_DIR, project_name, filename)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="Export file not found")
@@ -878,7 +1408,7 @@ async def _generate_brd_background(
             cap_result = await session.execute(
                 select(BrdCapture)
                 .where(BrdCapture.project_id == project_id, BrdCapture.is_kept == True)
-                .order_by(BrdCapture.order.asc())
+                .order_by(BrdCapture.timestamp.asc(), BrdCapture.id.asc())
             )
             captures = cap_result.scalars().all()
 
@@ -896,7 +1426,12 @@ async def _generate_brd_background(
             # Convert to dicts for pipeline
             capture_dicts = [_capture_to_dict(c) for c in captures]
             video_dicts = [
-                {"filename": v.filename, "transcript_text": v.transcript_text}
+                {
+                    "filename": v.filename,
+                    "order": v.order,
+                    "transcript_text": v.transcript_text,
+                    "transcript_segments": v.transcript_segments or [],
+                }
                 for v in videos
             ]
             doc_dicts = [
@@ -913,6 +1448,8 @@ async def _generate_brd_background(
                 instruction=instruction,
                 sections_to_generate=sections_to_generate,
             )
+            if not generated:
+                raise RuntimeError("BRD generation produced no sections from available evidence.")
 
             # 3. Upsert sections (skip manually overridden ones)
             for idx, gen_sec in enumerate(generated):
@@ -950,7 +1487,7 @@ async def _generate_brd_background(
                         section_key=key,
                         title=gen_sec["title"],
                         content=gen_sec["content"],
-                        order=idx,
+                        order=idx + 1,
                     )
                     session.add(section)
 
@@ -991,6 +1528,7 @@ async def _process_video_captures(
 
     async with AsyncSessionLocal() as session:
         try:
+            t0 = time.perf_counter()
             # 1. Smart capture (scene detect → fallback)
             # Save directly under project_id for flat serving structure
             frames_dir = os.path.join(BRD_FRAMES_DIR, project_id)
@@ -998,42 +1536,80 @@ async def _process_video_captures(
             
             # Temporary directory for this video's extraction to avoid mixups before prefixing
             with tempfile.TemporaryDirectory() as tmp_dir:
-                frames = await smart_capture(video_path, tmp_dir)
+                frames = await smart_capture(
+                    video_path,
+                    tmp_dir,
+                    min_interval_sec=float(settings.BRD_MIN_CAPTURE_INTERVAL_SEC or 1.5),
+                    max_frames=int(settings.BRD_MAX_CAPTURE_FRAMES or 36),
+                )
+                frames = sorted(frames, key=lambda f: (float(f.get("timestamp", 0.0)), f.get("filename", "")))
+                logger.info("Video %s capture extraction complete: %s frames in %.2fs", video_id, len(frames), time.perf_counter() - t0)
+
+                # Build transcript segments for +/-5 context windowing.
+                vid_result = await session.execute(select(BrdVideo).where(BrdVideo.id == video_id))
+                video_rec = vid_result.scalar_one_or_none()
+                transcript_segments = (video_rec.transcript_segments or []) if video_rec else []
 
                 # 2. Rename and create capture records
                 capture_records = []
-                for idx, frame in enumerate(frames):
+                for frame in frames:
                     # Prefix with video_id to ensure uniqueness in the project's flat folder
                     new_filename = f"{video_id}_{frame['filename']}"
                     new_path = os.path.join(frames_dir, new_filename)
                     os.rename(frame["path"], new_path)
 
+                    # Place in strict timestamp position across existing project captures.
+                    existing_result = await session.execute(
+                        select(BrdCapture)
+                        .where(BrdCapture.project_id == project_id)
+                        .order_by(BrdCapture.order.asc(), BrdCapture.timestamp.asc(), BrdCapture.id.asc())
+                    )
+                    existing_caps = existing_result.scalars().all()
+                    insert_pos = 0
+                    frame_ts = float(frame.get("timestamp", 0.0))
+                    for i, cap in enumerate(existing_caps):
+                        if float(cap.timestamp or 0.0) <= frame_ts:
+                            insert_pos = i + 1
+                    # Shift order for records at and after insertion position.
+                    for cap in existing_caps[insert_pos:]:
+                        cap.order = int(cap.order or 0) + 1
+
+                    ctx_window = _transcript_window_for_timestamp(transcript_segments, frame_ts, window=5)
                     capture = BrdCapture(
                         project_id=project_id,
                         video_id=video_id,
                         image_path=new_path,
-                        timestamp=frame["timestamp"],
-                        order=idx + 1,
-                        label=f"Frame {idx + 1}",
+                        timestamp=frame_ts,
+                        order=insert_pos + 1,
+                        label=f"Frame {insert_pos + 1}",
                         llm_status="processing",
+                        edits_json={"auto_crop": frame.get("auto_crop")} if frame.get("auto_crop") else {},
+                        details_json={"transcript_context_window": ctx_window},
                     )
                     session.add(capture)
+                    await session.flush()
                     capture_records.append(capture)
 
             await session.commit()
 
-            # 3. Async LLM description for each frame
+            # 3. Async LLM descriptions in batch with concurrency control.
+            frame_jobs = []
+            transcript_context_by_frame: dict[str, list[dict]] = {}
             for capture in capture_records:
-                try:
-                    desc = await frame_describer.describe_frame(capture.image_path)
-                    capture.ocr_text = desc.get("ocr_text", "")
-                    capture.description = desc.get("description", "")
-                    capture.details_json = desc
-                    capture.llm_status = "done"
-                except Exception as e:
-                    logger.error(f"LLM description failed for capture {capture.id}: {e}")
-                    capture.llm_status = "error"
-                    capture.description = f"Error: {e}"
+                context_window = (capture.details_json or {}).get("transcript_context_window") or []
+                frame_jobs.append({"id": capture.id, "path": capture.image_path})
+                transcript_context_by_frame[capture.id] = context_window
+
+            desc_results = await frame_describer.describe_frames_batch(
+                frame_jobs,
+                transcript_context_by_frame=transcript_context_by_frame,
+            )
+            for capture, desc in zip(capture_records, desc_results):
+                capture.ocr_text = desc.get("ocr_text", "")
+                capture.description = desc.get("description", "")
+                capture.details_json = {**(capture.details_json or {}), **desc}
+                has_error = str(capture.description or "").lower().startswith("error") or str(capture.description or "").lower() == "processing failed"
+                capture.llm_status = "error" if has_error else "done"
 
             # 4. Update video status
             result = await session.execute(
@@ -1044,7 +1620,12 @@ async def _process_video_captures(
                 video.status = "ready"
 
             await session.commit()
-            logger.info(f"Video {video_id}: processed {len(capture_records)} captures")
+            logger.info(
+                "Video %s processed %s captures end-to-end in %.2fs",
+                video_id,
+                len(capture_records),
+                time.perf_counter() - t0,
+            )
 
         except Exception as e:
             logger.error(f"Video processing failed for {video_id}: {e}")
@@ -1066,15 +1647,25 @@ async def _describe_single_capture(capture_id: str, image_path: str, db: AsyncSe
 
     async with AsyncSessionLocal() as session:
         try:
-            desc = await frame_describer.describe_frame(image_path)
             result = await session.execute(
                 select(BrdCapture).where(BrdCapture.id == capture_id)
             )
             capture = result.scalar_one_or_none()
             if capture:
+                transcript_ctx: List[dict] = []
+                if capture.video_id:
+                    v_result = await session.execute(select(BrdVideo).where(BrdVideo.id == capture.video_id))
+                    vid = v_result.scalar_one_or_none()
+                    if vid and vid.transcript_segments:
+                        transcript_ctx = _transcript_window_for_timestamp(
+                            vid.transcript_segments or [],
+                            float(capture.timestamp or 0.0),
+                            window=5,
+                        )
+                desc = await frame_describer.describe_frame(image_path, transcript_context=transcript_ctx)
                 capture.ocr_text = desc.get("ocr_text", "")
                 capture.description = desc.get("description", "")
-                capture.details_json = desc
+                capture.details_json = {**(capture.details_json or {}), **desc, "transcript_context_window": transcript_ctx}
                 capture.llm_status = "done"
                 await session.commit()
         except Exception as e:
@@ -1101,6 +1692,96 @@ async def _get_project_or_404(db: AsyncSession, project_id: str, user_id: str) -
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
+
+
+async def _get_capture_for_user_or_404(db: AsyncSession, capture_id: str, user_id: str) -> BrdCapture:
+    result = await db.execute(
+        select(BrdCapture)
+        .join(BrdProject, BrdProject.id == BrdCapture.project_id)
+        .where(BrdCapture.id == capture_id, BrdProject.user_id == user_id)
+    )
+    capture = result.scalar_one_or_none()
+    if not capture:
+        raise HTTPException(status_code=404, detail="Capture not found")
+    return capture
+
+
+async def _get_section_for_user_or_404(db: AsyncSession, section_id: str, user_id: str) -> BrdSection:
+    result = await db.execute(
+        select(BrdSection)
+        .join(BrdProject, BrdProject.id == BrdSection.project_id)
+        .where(BrdSection.id == section_id, BrdProject.user_id == user_id)
+    )
+    section = result.scalar_one_or_none()
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+    return section
+
+
+def _parse_transcript_segments(transcript: str, duration: float = 0.0) -> List[dict]:
+    """
+    Parse transcript into timestamped segments.
+    Supports lines like:
+      [00:12] Speaker: text
+      00:12:34 text
+    Falls back to a single segment when no timestamps are found.
+    """
+    segments: List[dict] = []
+    if not transcript or not transcript.strip():
+        return segments
+
+    import re
+
+    lines = [ln.strip() for ln in transcript.splitlines() if ln.strip()]
+    ts_pattern = re.compile(r"^\[?(\d{1,2}):(\d{2})(?::(\d{2}))?\]?\s*(.*)$")
+    for line in lines:
+        m = ts_pattern.match(line)
+        if not m:
+            continue
+        hh_or_mm, mm_or_ss, ss_opt, rest = m.groups()
+        if ss_opt is None:
+            minutes = int(hh_or_mm)
+            seconds = int(mm_or_ss)
+            start = minutes * 60 + seconds
+        else:
+            hours = int(hh_or_mm)
+            minutes = int(mm_or_ss)
+            seconds = int(ss_opt)
+            start = hours * 3600 + minutes * 60 + seconds
+        segments.append(
+            {
+                "start": float(start),
+                "end": float(start + 5),
+                "text": rest.strip(),
+                "speaker": None,
+            }
+        )
+
+    if not segments:
+        return [{"start": 0.0, "end": float(duration or 0.0), "text": transcript, "speaker": None}]
+
+    # Fill end times from next segment start.
+    for i in range(len(segments) - 1):
+        segments[i]["end"] = max(segments[i]["start"], segments[i + 1]["start"])
+    if duration and duration > segments[-1]["start"]:
+        segments[-1]["end"] = duration
+    else:
+        segments[-1]["end"] = segments[-1]["start"] + 5
+    return segments
+
+
+def _transcript_window_for_timestamp(
+    segments: List[dict],
+    timestamp: float,
+    window: int = 5,
+) -> List[dict]:
+    if not segments:
+        return []
+    ts = float(timestamp or 0.0)
+    nearest_idx = min(range(len(segments)), key=lambda i: abs(float(segments[i].get("start", 0.0)) - ts))
+    start = max(0, nearest_idx - window)
+    end = min(len(segments), nearest_idx + window + 1)
+    return segments[start:end]
 
 
 def _project_to_dict(p: BrdProject) -> dict:
@@ -1135,15 +1816,48 @@ def _project_full_dict(p: BrdProject) -> dict:
     return d
 
 
+def _resolve_capture_storage_path(project_id: str, candidate_path: Optional[str]) -> Optional[str]:
+    """Resolve possibly stale capture paths to an existing file on disk."""
+    if not candidate_path:
+        return None
+    try:
+        candidate = str(candidate_path)
+        if os.path.exists(candidate):
+            return os.path.abspath(candidate)
+
+        base_name = os.path.basename(candidate)
+        if not base_name:
+            return None
+
+        project_frames_dir = os.path.join(BRD_FRAMES_DIR, str(project_id))
+        direct = os.path.join(project_frames_dir, base_name)
+        if os.path.exists(direct):
+            return os.path.abspath(direct)
+
+        legacy_root = os.path.join(BRD_FRAMES_DIR, base_name)
+        if os.path.exists(legacy_root):
+            return os.path.abspath(legacy_root)
+
+        if os.path.isdir(project_frames_dir):
+            for sub in os.listdir(project_frames_dir):
+                sub_candidate = os.path.join(project_frames_dir, sub, base_name)
+                if os.path.exists(sub_candidate):
+                    return os.path.abspath(sub_candidate)
+    except Exception:
+        return None
+    return None
+
+
 def _capture_to_dict(c: BrdCapture) -> dict:
-    preview_path = c.preview_image_path
-    display_path = preview_path if (preview_path and os.path.exists(preview_path)) else c.image_path
+    resolved_preview = _resolve_capture_storage_path(c.project_id, c.preview_image_path)
+    resolved_image = _resolve_capture_storage_path(c.project_id, c.image_path)
+    display_path = resolved_preview or resolved_image
     return {
         "id": c.id,
         "project_id": c.project_id,
         "video_id": c.video_id,
-        "image_path": c.image_path,
-        "preview_image_path": c.preview_image_path,
+        "image_path": resolved_image or c.image_path,
+        "preview_image_path": resolved_preview or c.preview_image_path,
         "image_url": f"/api/brd/frames/{c.project_id}/{os.path.basename(display_path)}" if display_path else None,
         "timestamp": c.timestamp,
         "order": c.order,

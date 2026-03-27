@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import axios from "axios";
 
 const AuthContext = createContext(null);
+const AUTH_BASE_URL = "/api/auth";
 
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem("edge_token"));
@@ -34,7 +35,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUser = useCallback(async (currentToken) => {
     try {
-      const res = await axios.get("/api/auth/me", {
+      const res = await axios.get(`${AUTH_BASE_URL}/me`, {
         headers: { Authorization: `Bearer ${currentToken}` }
       });
       setUser(res.data);
@@ -59,7 +60,7 @@ export const AuthProvider = ({ children }) => {
     formData.append("username", email);
     formData.append("password", password);
 
-    const res = await axios.post("/api/auth/login", formData, {
+    const res = await axios.post(`${AUTH_BASE_URL}/login`, formData, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" }
     });
     

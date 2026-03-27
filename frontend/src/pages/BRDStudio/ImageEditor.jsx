@@ -41,6 +41,7 @@ export default function ImageEditor({ open, onClose, imageSrc, captureId, apiBas
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false);
   const imgRef = useRef(null);
   const canvasRef = useRef(null);
 
@@ -175,6 +176,10 @@ export default function ImageEditor({ open, onClose, imageSrc, captureId, apiBas
     setSaving(true);
     try {
       const img = imgRef.current;
+      if (!img) {
+        console.error("Image editor: source image not available.");
+        return;
+      }
       const canvas = document.createElement("canvas");
 
       let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
@@ -227,6 +232,8 @@ export default function ImageEditor({ open, onClose, imageSrc, captureId, apiBas
       if (res.ok) {
         onSaved?.();
         onClose();
+      } else {
+        console.error("Save preview failed with status:", res.status);
       }
     } catch (err) {
       console.error("Save preview failed:", err);
@@ -316,6 +323,13 @@ export default function ImageEditor({ open, onClose, imageSrc, captureId, apiBas
       </DialogTitle>
 
       <DialogContent sx={{ display: "flex", justifyContent: "center", alignItems: "center", position: "relative", overflow: "auto" }}>
+        {imageLoadError && (
+          <Box sx={{ position: "absolute", top: 16, left: 16, right: 16, zIndex: 2 }}>
+            <Typography sx={{ color: "#ef5350", fontSize: 12 }}>
+              Failed to load image for editing. Please refresh captures and retry.
+            </Typography>
+          </Box>
+        )}
         <Box sx={{ position: "relative", display: "inline-block" }}>
           {mode === "crop" ? (
             <ReactCrop
@@ -329,6 +343,8 @@ export default function ImageEditor({ open, onClose, imageSrc, captureId, apiBas
                 alt="Edit"
                 style={{ maxWidth: "100%", maxHeight: "70vh" }}
                 crossOrigin="anonymous"
+                onLoad={() => setImageLoadError(false)}
+                onError={() => setImageLoadError(true)}
               />
             </ReactCrop>
           ) : (
@@ -339,6 +355,8 @@ export default function ImageEditor({ open, onClose, imageSrc, captureId, apiBas
                 alt="Edit"
                 style={{ maxWidth: "100%", maxHeight: "70vh", display: "block" }}
                 crossOrigin="anonymous"
+                onLoad={() => setImageLoadError(false)}
+                onError={() => setImageLoadError(true)}
               />
               <canvas
                 ref={canvasRef}
@@ -364,7 +382,7 @@ export default function ImageEditor({ open, onClose, imageSrc, captureId, apiBas
           variant="contained"
           startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || imageLoadError}
           sx={{ background: "linear-gradient(135deg, #F26522 0%, #e55a1b 100%)" }}
         >
           Save Preview

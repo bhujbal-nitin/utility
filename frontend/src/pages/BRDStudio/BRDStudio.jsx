@@ -72,10 +72,12 @@ function AEStepIcon({ active, completed, stepIcon }) {
   );
 }
 
-const API_BASE = "";
+const API_BASE =
+  process.env.REACT_APP_BRD_API_BASE ||
+  (process.env.NODE_ENV === "development" ? "http://localhost:8001" : "");
 
 export default function BRDStudio({ onBack }) {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const [activeStep, setActiveStep] = useState(0);
   const [projectId, setProjectId] = useState(null);
   const [projectData, setProjectData] = useState(null);
@@ -96,16 +98,13 @@ export default function BRDStudio({ onBack }) {
         setCaptures(data.captures || []);
         setSections(data.sections || []);
 
-        if (data.sections?.length > 0 && activeStep === 0) {
-          setActiveStep(2);
-        } else if (data.captures?.length > 0 && activeStep === 0) {
-          setActiveStep(1);
-        }
+        // Keep the user on the step they explicitly selected.
+        // Do not auto-jump; users can always add more videos/assets in Step 1.
       }
     } catch (err) {
       console.error("Failed to fetch project:", err);
     }
-  }, [projectId, token, activeStep]);
+  }, [projectId, token]);
 
   useEffect(() => {
     fetchProject();

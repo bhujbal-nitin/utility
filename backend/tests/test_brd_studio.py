@@ -278,5 +278,57 @@ class TestSectionOrder:
             assert r in keys, f"Required section {r} missing"
 
 
+class TestTranscriptContextWindow:
+    """Regression tests for transcript parsing and +/-5 context windows."""
+
+    def test_parse_transcript_segments_supports_timestamps(self):
+        pytest.importorskip("jose")
+        from brd_service.router import _parse_transcript_segments
+
+        transcript = """
+        [00:01] user opens application
+        [00:05] user clicks login
+        [00:10] dashboard appears
+        """.strip()
+        segments = _parse_transcript_segments(transcript, duration=12)
+
+        assert len(segments) == 3
+        assert segments[0]["start"] == 1.0
+        assert segments[1]["start"] == 5.0
+        assert segments[2]["end"] == 12
+
+    def test_transcript_window_returns_nearest_plus_minus_five(self):
+        pytest.importorskip("jose")
+        from brd_service.router import _transcript_window_for_timestamp
+
+        segments = [
+            {"start": float(i * 10), "end": float(i * 10 + 9), "text": f"seg-{i}", "speaker": None}
+            for i in range(12)
+        ]
+        # Near segment index 6 -> expect indices 1..11 due to +/-5 clipped to bounds.
+        window = _transcript_window_for_timestamp(segments, timestamp=61.0, window=5)
+        texts = [s["text"] for s in window]
+        assert texts[0] == "seg-1"
+        assert texts[-1] == "seg-11"
+        assert len(window) == 11
+
+
+class TestEditorCallbackTokenClaims:
+    """Regression tests for callback token claim shape/validation assumptions."""
+
+    def test_callback_token_contains_expected_claims(self):
+        pytest.importorskip("jose")
+        from jose import jwt
+
+        secret = "unit-test-secret"
+        payload = {"project_id": "p1", "doc_key": "p1:12345", "purpose": "editor_callback"}
+        token = jwt.encode(payload, secret, algorithm="HS256")
+        decoded = jwt.decode(token, secret, algorithms=["HS256"])
+
+        assert decoded["project_id"] == "p1"
+        assert decoded["doc_key"] == "p1:12345"
+        assert decoded["purpose"] == "editor_callback"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])

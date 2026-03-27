@@ -85,8 +85,10 @@ export default function ExportManage({
   const handleRegenerate = async (sectionsToRegen = null) => {
     setRegenerating(true);
     try {
+      // Button onClick passes a click event by default; only allow an explicit array payload.
+      const normalizedSections = Array.isArray(sectionsToRegen) ? sectionsToRegen : null;
       const body = { 
-        sections: sectionsToRegen,
+        sections: normalizedSections,
         instruction: regenInstruction.trim() || undefined
       };
       

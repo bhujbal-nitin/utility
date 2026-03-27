@@ -16,6 +16,9 @@ import tempfile
 import base64
 import zlib
 import json
+import shutil
+import subprocess
+import textwrap
 import httpx
 from datetime import datetime
 from pathlib import Path
@@ -408,6 +411,11 @@ class ExportService:
                 i += 1
                 continue
 
+            # Skip markdown horizontal rules.
+            if re.match(r"^\s*[-*_]{3,}\s*$", line):
+                i += 1
+                continue
+
             # 1. Mermaid Rendering (fenced ```mermaid blocks)
             if "```mermaid" in line:
                 mermaid_code = ""
@@ -493,11 +501,11 @@ class ExportService:
                 i += 1
                 continue
 
-            # 3. Tables
-            if "|" in line and i + 1 < len(lines) and re.match(r"^\s*\|[-:|]+\|\s*$", lines[i + 1]):
+            # 3. Tables (accept imperfect markdown tables too)
+            if self._is_table_candidate_line(line):
                 table_lines = [line]
                 i += 1
-                while i < len(lines) and "|" in lines[i]:
+                while i < len(lines) and self._is_table_candidate_line(lines[i]):
                     table_lines.append(lines[i])
                     i += 1
                 temp_doc = Document()
@@ -509,13 +517,18 @@ class ExportService:
                 continue
 
             # 4. Standard Paragraph / Headings
+            heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
+            if heading_match:
+                level = min(4, max(1, len(heading_match.group(1))))
+                heading_text = heading_match.group(2).strip()
+                h = doc.add_heading(heading_text, level=level)
+                insertion_point.addnext(h._p)
+                insertion_point = h._p
+                i += 1
+                continue
+
             new_p = doc.add_paragraph()
-            if line.startswith("### "):
-                run = new_p.add_run(line[4:].strip())
-                run.font.bold = True
-                run.font.size = Pt(12)
-                run.font.color.rgb = AE_ORANGE
-            elif line.startswith("- ") or line.startswith("* "):
+            if line.startswith("- ") or line.startswith("* "):
                 try:
                     new_p.style = "List Bullet"
                 except KeyError:
@@ -530,6 +543,10 @@ class ExportService:
 
     def _add_run_with_markdown(self, paragraph, text):
         """Simple inline markdown parser for bold (**) and italic (* / _)"""
+        text = text or ""
+        # Normalize markdown links for DOCX output.
+        text = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r"\1 (\2)", text)
+
         # Split by bold markers
         parts = re.split(r"(\*\*.*?\*\*)", text)
         for part in parts:
@@ -554,122 +571,152 @@ class ExportService:
                         paragraph.add_run(i_part)
 
     async def _render_mermaid(self, code: str) -> Optional[bytes]:
-        """Convert Mermaid to PNG via mermaid.ink with robust cleanup and label quoting."""
+        """Convert Mermaid to PNG with hardened sanitization and fallback chain."""
         try:
-            code = re.sub(r"```(mermaid)?", "", code).strip()
-            code = "\n".join([line.rstrip(";") for line in code.split("\n")])
-
-            BRACKET_PAIRS = {"[": "]", "{": "}", "(": ")"}
-
-            def sanitize_mermaid_line(line: str) -> str:
-                """Quote and sanitize node labels on a single Mermaid line, matching correct bracket pairs."""
-                stripped = line.strip()
-                if stripped.startswith("%%") or "--" in stripped.split("[")[0].split("{")[0].split("(")[0] and not any(c in stripped for c in "[{("):
-                    return line
-
-                result = []
-                i = 0
-                while i < len(line):
-                    # Detect node definition: one or more word chars followed by opening bracket
-                    m = re.match(r'(\w+)([{\[\(])', line[i:])
-                    if m:
-                        node_id = m.group(1)
-                        open_br = m.group(2)
-                        close_br = BRACKET_PAIRS[open_br]
-                        start = i + len(node_id) + 1  # position after opening bracket
-
-                        # Handle double brackets: [[ ]], (( ))
-                        double_open = open_br * 2
-                        double_close = close_br * 2
-                        is_double = line[i + len(node_id):i + len(node_id) + 2] == double_open
-                        if is_double:
-                            actual_close = double_close
-                            start += 1
-                        else:
-                            actual_close = close_br
-
-                        # Find the matching close bracket (scan for the CORRECT closer)
-                        depth = 1 if not is_double else 1
-                        j = start
-                        while j < len(line):
-                            remaining = line[j:]
-                            if is_double and remaining.startswith(double_close):
-                                depth -= 1
-                                if depth == 0:
-                                    break
-                                j += 2
-                            elif not is_double and line[j] == close_br:
-                                depth -= 1
-                                if depth == 0:
-                                    break
-                                j += 1
-                            elif not is_double and line[j] == open_br:
-                                depth += 1
-                                j += 1
-                            else:
-                                j += 1
-
-                        if j < len(line):
-                            label = line[start:j]
-                            # Strip existing quotes and re-quote, sanitizing special chars
-                            label = label.strip('"').strip()
-                            # Remove unmatched parens/brackets inside labels
-                            for ch_open, ch_close in [("(", ")"), ("[", "]"), ("{", "}")]:
-                                if ch_open != open_br:
-                                    label = label.replace(ch_open, "").replace(ch_close, "")
-                            label = label.replace('"', "'")
-
-                            if is_double:
-                                result.append(f'{node_id}{double_open}"{label}"{double_close}')
-                                i = j + 2
-                            else:
-                                result.append(f'{node_id}{open_br}"{label}"{close_br}')
-                                i = j + 1
-                        else:
-                            result.append(line[i])
-                            i += 1
-                    else:
-                        result.append(line[i])
-                        i += 1
-
-                return "".join(result)
-
-            processed_lines = []
-            for line in code.split("\n"):
-                stripped = line.strip()
-                if stripped and not stripped.startswith("%%"):
-                    processed_lines.append(sanitize_mermaid_line(line))
-                else:
-                    processed_lines.append(line)
-            code = "\n".join(processed_lines)
-
-            if not any(code.strip().startswith(prefix) for prefix in ["graph", "sequenceDiagram", "flowchart", "classDiagram", "stateDiagram", "erDiagram"]):
-                code = "graph TD\n" + code
-
+            code = self._sanitize_mermaid_code(code)
             code_bytes = code.encode("utf-8")
 
-            # Use pako-compatible deflate compression for shorter, more reliable URLs
+            # Primary: mermaid.ink (pako + base64)
             compressed = zlib.compress(code_bytes, 9)
             pako_b64 = base64.urlsafe_b64encode(compressed).decode("utf-8")
             pako_url = f"https://mermaid.ink/img/pako:{pako_b64}"
-
-            # Also prepare plain base64 as fallback
             base64_str = base64.b64encode(code_bytes).decode("utf-8")
             base64_url = f"https://mermaid.ink/img/{base64_str}"
 
             async with httpx.AsyncClient(follow_redirects=True) as client:
                 for url in [pako_url, base64_url]:
                     try:
-                        res = await client.get(url, timeout=30.0)
-                        if res.status_code == 200:
+                        res = await client.get(url, timeout=25.0)
+                        if res.status_code == 200 and res.content:
                             return res.content
-                        logger.warning(f"Mermaid.ink returned {res.status_code} for URL length {len(url)}")
+                        logger.warning("Mermaid remote render returned %s", res.status_code)
                     except Exception as req_err:
-                        logger.warning(f"Mermaid.ink request failed: {req_err}")
-                logger.error(f"Mermaid.ink failed for both pako and base64 URLs. Code:\n{code}")
+                        logger.warning("Mermaid remote render failed: %s", req_err)
+
+            # Fallback 1: Graphviz (if dot is installed)
+            graphviz_png = self._render_graphviz_from_mermaid(code)
+            if graphviz_png:
+                logger.info("Diagram rendered via Graphviz fallback.")
+                return graphviz_png
+
+            # Fallback 2: deterministic textual flow card image
+            text_png = self._render_text_flow_fallback(code)
+            if text_png:
+                logger.info("Diagram rendered via text-image fallback.")
+                return text_png
+
+            logger.error("All diagram render fallbacks failed.")
         except Exception as e:
             logger.error(f"Failed to render Mermaid diagram: {e}", exc_info=True)
         return None
+
+    def _sanitize_mermaid_code(self, code: str) -> str:
+        code = re.sub(r"```(mermaid)?", "", code, flags=re.IGNORECASE).strip()
+        lines = []
+        for raw in code.split("\n"):
+            ln = raw.rstrip(";").rstrip()
+            if not ln:
+                continue
+            # Remove very long labels that cause overflow
+            ln = re.sub(
+                r'\["([^"]{70,})"\]',
+                lambda m: '["' + (m.group(1)[:67] + "...").replace('"', "'") + '"]',
+                ln,
+            )
+            # Force quote any unquoted node label with []
+            ln = re.sub(r'(\b[A-Za-z0-9_]+)\[([^\]"]+)\]', lambda m: f'{m.group(1)}["{m.group(2).strip().replace(chr(34), chr(39))}"]', ln)
+            ln = re.sub(r'(\b[A-Za-z0-9_]+)\{([^\}"]+)\}', lambda m: f'{m.group(1)}{{"{m.group(2).strip().replace(chr(34), chr(39))}"}}', ln)
+            lines.append(ln)
+        cleaned = "\n".join(lines)
+        if not re.match(r"^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram)\b", cleaned):
+            cleaned = "graph TD\n" + cleaned
+        return cleaned
+
+    def _extract_edges_from_mermaid(self, code: str) -> List[tuple]:
+        edges = []
+        for ln in code.splitlines():
+            line = ln.strip()
+            if "-->" not in line:
+                continue
+            m = re.match(r"([A-Za-z0-9_]+)\s*--(?:\|[^|]+\|)?>\s*([A-Za-z0-9_]+)", line)
+            if m:
+                edges.append((m.group(1), m.group(2)))
+        return edges
+
+    def _render_graphviz_from_mermaid(self, code: str) -> Optional[bytes]:
+        dot_exe = shutil.which("dot")
+        if not dot_exe:
+            return None
+        edges = self._extract_edges_from_mermaid(code)
+        if not edges:
+            return None
+
+        nodes = sorted({n for e in edges for n in e})
+        dot_lines = ['digraph G {', 'rankdir=TB;', 'node [shape=box,fontsize=10];']
+        for n in nodes:
+            dot_lines.append(f'{n} [label="{n}"];')
+        for src, dst in edges:
+            dot_lines.append(f"{src} -> {dst};")
+        dot_lines.append("}")
+        dot_src = "\n".join(dot_lines)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".dot", mode="w", encoding="utf-8") as f:
+            f.write(dot_src)
+            dot_path = f.name
+        out_path = dot_path + ".png"
+        try:
+            proc = subprocess.run([dot_exe, "-Tpng", dot_path, "-o", out_path], capture_output=True, text=True, check=False)
+            if proc.returncode != 0 or not os.path.exists(out_path):
+                return None
+            with open(out_path, "rb") as f:
+                return f.read()
+        except Exception:
+            return None
+        finally:
+            for p in [dot_path, out_path]:
+                try:
+                    if os.path.exists(p):
+                        os.remove(p)
+                except Exception:
+                    pass
+
+    def _render_text_flow_fallback(self, code: str) -> Optional[bytes]:
+        try:
+            # Create deterministic PNG with wrapped flow text.
+            lines = [ln.strip() for ln in code.splitlines() if ln.strip()][:40]
+            if not lines:
+                lines = ["Flow diagram unavailable."]
+            content = "\n".join(lines)
+            wrapped = []
+            for para in content.split("\n"):
+                wrapped.extend(textwrap.wrap(para, width=68) or [""])
+            width = 1200
+            line_h = 24
+            height = max(220, 80 + len(wrapped) * line_h)
+
+            img = PILImage.new("RGB", (width, height), (248, 249, 251))
+            from PIL import ImageDraw, ImageFont
+
+            draw = ImageDraw.Draw(img)
+            try:
+                font = ImageFont.truetype("arial.ttf", 18)
+                font_b = ImageFont.truetype("arialbd.ttf", 22)
+            except Exception:
+                font = ImageFont.load_default()
+                font_b = ImageFont.load_default()
+
+            draw.rectangle([(20, 20), (width - 20, height - 20)], outline=(31, 56, 100), width=2)
+            draw.text((40, 36), "Process Flow (Fallback Rendering)", fill=(31, 56, 100), font=font_b)
+            y = 78
+            for ln in wrapped:
+                draw.text((40, y), ln, fill=(30, 30, 30), font=font)
+                y += line_h
+
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return buf.getvalue()
+        except Exception:
+            return None
 
     def _add_toc_field(self, paragraph):
         """Native Word TOC field."""
@@ -757,22 +804,20 @@ class ExportService:
                 continue
 
             # Handle markdown tables
-            if "|" in line and i + 1 < len(lines) and re.match(r"^\s*\|[-:|]+\|\s*$", lines[i + 1]):
+            if self._is_table_candidate_line(line):
                 table_lines = [line]
                 i += 1
-                while i < len(lines) and "|" in lines[i]:
+                while i < len(lines) and self._is_table_candidate_line(lines[i]):
                     table_lines.append(lines[i])
                     i += 1
                 self._render_table_to_docx(doc, table_lines)
                 continue
 
             # Handle headings
-            if line.startswith("### "):
-                doc.add_heading(line[4:].strip(), level=3)
-                i += 1
-                continue
-            if line.startswith("## "):
-                doc.add_heading(line[3:].strip(), level=2)
+            heading_match = re.match(r"^(#{1,6})\s+(.+)$", line.strip())
+            if heading_match:
+                level = min(4, max(1, len(heading_match.group(1))))
+                doc.add_heading(heading_match.group(2).strip(), level=level)
                 i += 1
                 continue
 
@@ -804,13 +849,24 @@ class ExportService:
 
             i += 1
 
+    def _is_table_candidate_line(self, line: str) -> bool:
+        stripped = (line or "").strip()
+        if not stripped:
+            return False
+        # Accept markdown separator rows and rows with at least 2 pipe delimiters.
+        if re.match(r"^\|?[\s:-]+\|[\s|:-]*\|?$", stripped):
+            return True
+        return stripped.count("|") >= 2
+
     def _render_table_to_docx(self, doc: Document, table_lines: List[str]):
         """Render a markdown table into a DOCX table with AE styling."""
         rows = []
         for line in table_lines:
-            if re.match(r"^\s*\|[-:|]+\|\s*$", line):
+            if re.match(r"^\s*\|?[\s:-]+\|[\s|:-]*\|?\s*$", line):
                 continue  # Skip separator row
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if len(cells) < 2:
+                continue
             rows.append(cells)
 
         if len(rows) < 2:
@@ -826,7 +882,9 @@ class ExportService:
                 if c_idx >= num_cols:
                     break
                 cell = table.cell(r_idx, c_idx)
-                cell.text = cell_text
+                cell.text = ""
+                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+                self._add_run_with_markdown(p, cell_text.replace("`", ""))
 
                 # Header row styling
                 if r_idx == 0:
@@ -866,6 +924,54 @@ class ExportService:
 
     # ── PDF Export ────────────────────────────────────────────────────────
 
+    def _convert_docx_to_pdf_best_effort(self, docx_path: str, pdf_path: str) -> bool:
+        """
+        Best-effort DOCX -> PDF conversion.
+        Order:
+        1) docx2pdf (Windows/macOS Word-backed conversion)
+        2) LibreOffice/soffice headless conversion
+        """
+        # 1) docx2pdf python path
+        try:
+            from docx2pdf import convert as docx2pdf_convert  # type: ignore
+            docx2pdf_convert(docx_path, pdf_path)
+            if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+                return True
+        except Exception:
+            pass
+
+        # 2) soffice headless path
+        soffice = shutil.which("soffice") or shutil.which("libreoffice")
+        if soffice:
+            try:
+                out_dir = os.path.dirname(pdf_path)
+                proc = subprocess.run(
+                    [
+                        soffice,
+                        "--headless",
+                        "--convert-to",
+                        "pdf",
+                        "--outdir",
+                        out_dir,
+                        docx_path,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                expected = os.path.join(
+                    out_dir,
+                    f"{Path(docx_path).stem}.pdf",
+                )
+                if os.path.exists(expected) and os.path.getsize(expected) > 0:
+                    if expected != pdf_path:
+                        shutil.move(expected, pdf_path)
+                    return True
+                logger.warning("LibreOffice conversion failed rc=%s stderr=%s", proc.returncode, proc.stderr[:500])
+            except Exception:
+                pass
+        return False
+
     async def export_pdf(
         self,
         project_name: str,
@@ -873,7 +979,25 @@ class ExportService:
         captures: List[Dict],
         project_meta: Optional[Dict] = None,
     ) -> str:
-        """Generate PDF export using ReportLab."""
+        """
+        Generate PDF export.
+        Canonical path:
+          1) materialize template-mapped DOCX
+          2) convert DOCX->PDF (if converter available)
+          3) fallback to reportlab renderer
+        """
+        # Canonical materialization first.
+        try:
+            docx_path = await self.export_docx_from_template(project_name, sections, captures, project_meta)
+            pdf_candidate = os.path.splitext(docx_path)[0] + ".pdf"
+            if self._convert_docx_to_pdf_best_effort(docx_path, pdf_candidate):
+                logger.info("PDF exported via canonical DOCX conversion: %s", pdf_candidate)
+                return pdf_candidate
+            logger.warning("DOCX->PDF converter unavailable; using reportlab fallback.")
+        except Exception as e:
+            logger.warning("Canonical PDF path failed, using fallback renderer: %s", e)
+
+        # Fallback renderer
         safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", project_name).strip("._") or "Project"
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"BRD_{safe_name}_{timestamp}.pdf"

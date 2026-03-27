@@ -241,6 +241,29 @@ graph TD
 Then below the Mermaid code, provide a brief textual description of the flow.
 """
 
+FLOW_GRAPH_JSON_PROMPT = """You are generating a canonical process graph in strict JSON.
+Use the provided evidence and output ONLY valid JSON in this schema:
+{
+  "title": "string",
+  "nodes": [
+    {"id": "N1", "label": "Start", "type": "start|process|decision|end"}
+  ],
+  "edges": [
+    {"from": "N1", "to": "N2", "label": "optional short label"}
+  ]
+}
+
+Rules:
+1) Keep labels concise (max 48 chars), business readable.
+2) IDs must be unique and alphanumeric/underscore only.
+3) Include at least one start and one end node.
+4) Use decision type only for true branching points.
+5) Return JSON only, no markdown fences.
+
+Evidence:
+{evidence_pack}
+"""
+
 # ── Section metadata (display order + titles) ────────────────────────────────
 
 SECTION_DEFINITIONS = [

@@ -9,7 +9,6 @@ import asyncio
 import os
 import re
 import logging
-import tempfile
 import subprocess
 from pathlib import Path
 from typing import List, Dict, Optional
@@ -68,7 +67,8 @@ async def extract_frames_scene_detect(
         "-vf", f"select='gt(scene\\,{scene_threshold})',showinfo",
         "-vsync", "vfr",
         "-frame_pts", "1",
-        "-q:v", "2",
+        "-q:v", "1",
+        "-compression_level", "0",
         os.path.join(output_dir, "scene_%04d.jpg"),
     ]
 
@@ -135,7 +135,8 @@ async def extract_frames_interval(
         "ffmpeg", "-y",
         "-i", video_path,
         "-vf", f"fps=1/{interval_sec}",
-        "-q:v", "2",
+        "-q:v", "1",
+        "-compression_level", "0",
         os.path.join(output_dir, "interval_%04d.jpg"),
     ]
 
@@ -214,6 +215,8 @@ async def smart_capture(
     output_dir: str,
     scene_threshold: float = 0.3,
     min_scene_frames: int = 5,
+    min_interval_sec: float = 1.0,
+    max_frames: int = 80,
 ) -> List[Dict]:
     """
     Smart capture: tries scene detection first, falls back to interval if too few frames.
@@ -223,13 +226,159 @@ async def smart_capture(
     
     # Try intelligent scene detection first
     frames = await extract_frames_scene_detect(
-        video_path, output_dir, scene_threshold=scene_threshold
+        video_path,
+        output_dir,
+        scene_threshold=scene_threshold,
+        min_interval=min_interval_sec,
+        max_frames=max_frames,
     )
 
     if len(frames) >= min_scene_frames:
         logger.info(f"Scene detection successful: {len(frames)} frames")
-        return frames
+        return await postprocess_frames(frames)
 
     # Fallback to interval-based capture
     logger.info(f"Scene detection yielded {len(frames)} frames (< {min_scene_frames}), falling back to interval")
-    return await extract_frames_interval(video_path, output_dir)
+    fallback_frames = await extract_frames_interval(video_path, output_dir, max_frames=max_frames)
+    processed = await postprocess_frames(fallback_frames)
+    return processed[:max_frames]
+
+
+def _detect_teams_gallery_only(image_path: str) -> bool:
+    """
+    Heuristic detector for Microsoft Teams gallery-only screens (light/dark).
+    Conservative to avoid dropping real business content.
+    """
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return False
+
+    img = cv2.imread(image_path)
+    if img is None:
+        return False
+
+    h, w = img.shape[:2]
+    if h < 200 or w < 200:
+        return False
+
+    # Edge density + repeated face-tile pattern heuristic.
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    edge_density = float(np.count_nonzero(edges)) / float(edges.size)
+
+    # Split into rough grid and compare variance to detect tiled participant windows.
+    grid_rows, grid_cols = 3, 4
+    cell_h, cell_w = h // grid_rows, w // grid_cols
+    cell_means = []
+    for r in range(grid_rows):
+        for c in range(grid_cols):
+            cell = gray[r * cell_h : (r + 1) * cell_h, c * cell_w : (c + 1) * cell_w]
+            if cell.size:
+                cell_means.append(float(cell.mean()))
+    if not cell_means:
+        return False
+
+    mean_std = float(np.std(cell_means))
+    # Conservative gallery detector: avoid dropping valid business frames.
+    return (edge_density < 0.08 and mean_std < 22.0)
+
+
+def _crop_teams_sidebar_if_present(image_path: str) -> Optional[Dict]:
+    """
+    Crop right-side Teams panel for screen-share frames.
+    Returns crop metadata if applied.
+    """
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return None
+
+    img = cv2.imread(image_path)
+    if img is None:
+        return None
+
+    h, w = img.shape[:2]
+    # Only consider widescreen captures.
+    if w < 900:
+        return None
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    split_x = int(w * 0.78)
+    right_strip = gray[:, split_x:]
+    if right_strip.size == 0:
+        return None
+    main_strip = gray[:, :split_x] if split_x > 0 else gray
+
+    # Sidebar tends to have lower visual entropy and strong vertical separators.
+    entropy_like = float(np.std(right_strip))
+    sobel = cv2.Sobel(right_strip, cv2.CV_64F, 1, 0, ksize=3)
+    vertical_energy = float(np.mean(np.abs(sobel)))
+    right_mean = float(np.mean(right_strip))
+    main_mean = float(np.mean(main_strip)) if main_strip.size else right_mean
+    brightness_delta = abs(main_mean - right_mean)
+    # Boundary contrast around likely panel split.
+    boundary_band = gray[:, max(1, split_x - 2): min(w - 1, split_x + 2)]
+    boundary_grad = float(np.mean(np.abs(np.diff(boundary_band.astype(np.float32), axis=1)))) if boundary_band.size else 0.0
+
+    # Trigger on classic separator signature OR strong side-panel contrast profile.
+    should_crop = (
+        (entropy_like < 34.0 and vertical_energy > 9.5)
+        or (entropy_like < 45.0 and brightness_delta > 14.0)
+        or (boundary_grad > 14.0 and entropy_like < 52.0)
+    )
+    if should_crop:
+        # Crop right panel; keep most business area.
+        crop_x = int(w * 0.82)
+        cropped = img[:, :crop_x]
+        if cropped.size == 0:
+            return None
+        cv2.imwrite(image_path, cropped, [int(cv2.IMWRITE_JPEG_QUALITY), 97])
+        return {"x": 0, "y": 0, "width": crop_x, "height": h, "auto_crop": "teams_sidebar"}
+
+    return None
+
+
+async def postprocess_frames(frames: List[Dict]) -> List[Dict]:
+    """
+    Postprocess extracted frames:
+    - drop Teams gallery-only frames
+    - auto-crop Teams sidebar
+    - enforce timestamp ordering
+    """
+    processed: List[Dict] = []
+    dropped = 0
+    gallery_dropped_candidates: List[Dict] = []
+
+    for frame in frames:
+        path = frame.get("path")
+        if not path or not os.path.exists(path):
+            continue
+
+        if _detect_teams_gallery_only(path):
+            dropped += 1
+            gallery_dropped_candidates.append(frame)
+            continue
+
+        crop_meta = _crop_teams_sidebar_if_present(path)
+        if crop_meta:
+            frame["auto_crop"] = crop_meta
+            frame["teams_sidebar_cropped"] = True
+
+        processed.append(frame)
+
+    # Safety guard: if detector was too aggressive, retain a subset of dropped frames
+    # so capture count remains close to source density.
+    min_keep_target = max(12, int(len(frames) * 0.72))
+    if len(processed) < min_keep_target and gallery_dropped_candidates:
+        need = min_keep_target - len(processed)
+        # Re-add earliest dropped frames to preserve sequence continuity.
+        gallery_dropped_candidates.sort(key=lambda x: (float(x.get("timestamp", 0.0)), x.get("filename", "")))
+        processed.extend(gallery_dropped_candidates[:need])
+        dropped = max(0, dropped - need)
+
+    processed.sort(key=lambda x: (float(x.get("timestamp", 0.0)), x.get("filename", "")))
+    logger.info("Frame postprocess: kept=%s dropped_gallery=%s", len(processed), dropped)
+    return processed

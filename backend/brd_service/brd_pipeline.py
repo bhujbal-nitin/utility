@@ -6,8 +6,9 @@ transcripts + captures + documents. Includes mandatory flow diagrams.
 """
 
 import asyncio
-import json
 import logging
+import json
+import re
 from typing import Any, Dict, List, Optional
 
 import vertexai
@@ -20,6 +21,7 @@ from brd_service.prompts import (
     SECTION_DEFINITIONS,
     EVIDENCE_EXTRACTION_PROMPT,
     FLOW_DIAGRAM_PROMPT,
+    FLOW_GRAPH_JSON_PROMPT,
     REFINE_SECTION_PROMPT,
     GENERATION_CONFIGS,
 )
@@ -77,13 +79,13 @@ class BRDPipeline:
         documents: List[Dict],
     ) -> str:
         """Build a unified evidence string from all sources."""
-        parts = []
+        parts: List[str] = []
 
         # 1. Capture evidence (Primary for Section 9 Narrative)
         if captures:
             parts.append("## SCREEN CAPTURE NARRATIVE CONTEXT")
             parts.append("The following captures represent the step-by-step visual flow of the process. Use these to build the detailed narrative.")
-            for idx, cap in enumerate(captures):
+            for idx, cap in enumerate(sorted(captures, key=lambda c: (c.get("timestamp", 0), c.get("id", "")))):
                 if not cap.get("is_kept", True):
                     continue
                 parts.append(f"\n### [IMAGE_REF:{cap.get('id', '')}] - Screen: {cap.get('label', 'Step ' + str(idx+1))}")
@@ -95,26 +97,49 @@ class BRDPipeline:
                 if details.get("action_performed"):
                     parts.append(f"- User Action: {details['action_performed']}")
                 if cap.get("ocr_text"):
-                    parts.append(f"- Key Text/Fields on Screen: {cap['ocr_text'][:500]}")
+                    parts.append(f"- Key Text/Fields on Screen: {cap['ocr_text'][:1200]}")
 
         # 2. Transcript evidence
         if transcripts:
             parts.append("\n## TRANSCRIPT & MEETING CONTEXT")
-            for t in transcripts:
+            for t in sorted(transcripts, key=lambda t: (t.get("order", 10**9), t.get("filename", ""))):
                 text = t.get("transcript_text", "") or ""
                 if text.strip():
                     parts.append(f"### Recording: {t.get('filename', 'Walkthrough')}")
-                    parts.append(text[:8000])
+                    parts.append(text)
 
         # 3. Additional documents
         if documents:
             parts.append("\n## DOCUMENTATION CONTEXT")
-            for doc in documents:
+            for doc in sorted(documents, key=lambda d: d.get("filename", "")):
                 if doc.get("extracted_text"):
                     parts.append(f"### Ref Doc: {doc.get('filename', 'Document')}")
-                    parts.append(doc["extracted_text"][:3000])
+                    parts.append(doc["extracted_text"])
 
         return "\n".join(parts)
+
+    def build_evidence_manifest(
+        self,
+        captures: List[Dict],
+        transcripts: List[Dict],
+        documents: List[Dict],
+    ) -> Dict[str, Any]:
+        kept = [c for c in captures if c.get("is_kept", True)]
+        missing_desc = [c.get("id") for c in kept if not (c.get("description") or "").strip()]
+        transcript_missing = [t.get("filename") for t in transcripts if not (t.get("transcript_text") or "").strip()]
+        doc_missing = [d.get("filename") for d in documents if not (d.get("extracted_text") or "").strip()]
+        return {
+            "captures_total": len(captures),
+            "captures_kept": len(kept),
+            "capture_ids": [c.get("id") for c in kept],
+            "captures_missing_description": [x for x in missing_desc if x],
+            "transcripts_total": len(transcripts),
+            "transcripts_with_text": len(transcripts) - len(transcript_missing),
+            "transcripts_missing_text": [x for x in transcript_missing if x],
+            "documents_total": len(documents),
+            "documents_with_text": len(documents) - len(doc_missing),
+            "documents_missing_text": [x for x in doc_missing if x],
+        }
 
     # ── Section Generation ────────────────────────────────────────────────
 
@@ -168,9 +193,17 @@ class BRDPipeline:
         evidence_pack: str,
         flow_type: str = "existing",
     ) -> str:
-        """Generate a Mermaid flow diagram. ALWAYS generates even with minimal evidence."""
-        prompt = FLOW_DIAGRAM_PROMPT.format(evidence_pack=evidence_pack)
+        """Generate robust Mermaid via canonical flow JSON and code-side compilation."""
+        try:
+            graph_json = await self._generate_flow_graph_json(evidence_pack)
+            if graph_json:
+                mermaid = self._flow_json_to_mermaid(graph_json)
+                return f"```mermaid\n{mermaid}\n```\n\n*{flow_type.replace('_', ' ').title()} diagram generated from canonical flow graph.*"
+        except Exception as e:
+            logger.warning("Canonical flow-JSON generation failed (%s): %s", flow_type, e)
 
+        # Fallback to legacy direct Mermaid prompt
+        prompt = FLOW_DIAGRAM_PROMPT.format(evidence_pack=evidence_pack)
         try:
             model = self._ensure_model()
             response = await asyncio.wait_for(
@@ -181,18 +214,73 @@ class BRDPipeline:
                 ),
                 timeout=VERTEXAI_TIMEOUT,
             )
-            return self._extract_text(response).strip()
+            text = self._extract_text(response).strip()
+            if "```mermaid" in text:
+                return text
         except Exception as e:
-            logger.error(f"Flow diagram generation failed ({flow_type}): {e}")
-            # Return a minimal fallback diagram
-            return f"""```mermaid
+            logger.error(f"Legacy flow diagram generation failed ({flow_type}): {e}")
+
+        return """```mermaid
 graph TD
-    A[Start] --> B[Process Step 1]
-    B --> C[Process Step 2]
-    C --> D[End]
+    N1["Start"] --> N2["Process Step 1"]
+    N2 --> N3["Process Step 2"]
+    N3 --> N4["End"]
 ```
 
-*Flow diagram could not be generated from evidence. Please update manually.*"""
+*Flow diagram fallback generated. Please refine manually if needed.*"""
+
+    async def _generate_flow_graph_json(self, evidence_pack: str) -> Optional[Dict[str, Any]]:
+        prompt = FLOW_GRAPH_JSON_PROMPT.format(evidence_pack=evidence_pack)
+        model = self._ensure_model()
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                model.generate_content,
+                prompt,
+                generation_config=GENERATION_CONFIGS["precise"],
+            ),
+            timeout=VERTEXAI_TIMEOUT,
+        )
+        raw = self._extract_text(response).strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*", "", raw)
+            raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        if not isinstance(data, dict):
+            return None
+        nodes = data.get("nodes") or []
+        edges = data.get("edges") or []
+        if not nodes or not edges:
+            return None
+        return data
+
+    def _flow_json_to_mermaid(self, graph: Dict[str, Any]) -> str:
+        nodes = graph.get("nodes") or []
+        edges = graph.get("edges") or []
+        node_lines = []
+        edge_lines = []
+
+        for node in nodes:
+            node_id = re.sub(r"[^A-Za-z0-9_]", "_", str(node.get("id", "N")))
+            label = (str(node.get("label", "")).strip() or node_id).replace('"', "'")[:48]
+            ntype = str(node.get("type", "process")).lower()
+            if ntype == "decision":
+                node_lines.append(f'    {node_id}{{"{label}"}}')
+            else:
+                node_lines.append(f'    {node_id}["{label}"]')
+
+        for edge in edges:
+            src = re.sub(r"[^A-Za-z0-9_]", "_", str(edge.get("from", "")))
+            dst = re.sub(r"[^A-Za-z0-9_]", "_", str(edge.get("to", "")))
+            if not src or not dst:
+                continue
+            lbl = str(edge.get("label", "")).strip().replace('"', "'")[:32]
+            if lbl:
+                edge_lines.append(f'    {src} -->|{lbl}| {dst}')
+            else:
+                edge_lines.append(f"    {src} --> {dst}")
+
+        mermaid = "graph TD\n" + "\n".join(node_lines + edge_lines)
+        return mermaid.strip()
 
     # ── Section Refinement ────────────────────────────────────────────────
 
@@ -240,6 +328,8 @@ graph TD
         """
         # 1. Build evidence pack
         evidence_pack = self.build_evidence_pack(captures, videos, documents)
+        manifest = self.build_evidence_manifest(captures, videos, documents)
+        logger.info("Evidence manifest: %s", manifest)
         logger.info(f"Evidence pack built: {len(evidence_pack)} chars")
 
         # 2. Generate all sections concurrently (with limit)

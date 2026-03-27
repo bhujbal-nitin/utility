@@ -12,10 +12,7 @@ import {
   Typography,
   Button,
   TextField,
-  Paper,
-  Grid,
   CircularProgress,
-  Chip,
   IconButton,
   Tooltip,
   LinearProgress,
@@ -24,6 +21,13 @@ import {
   CardContent,
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogActions,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  Grid,
 } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import VideoFileIcon from "@mui/icons-material/VideoFile";
@@ -32,6 +36,8 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import HourglassTopIcon from "@mui/icons-material/HourglassTop";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 
 export default function UploadCapture({
   projectId,
@@ -42,6 +48,7 @@ export default function UploadCapture({
   token,
   apiBase,
 }) {
+  const [ingestionMode, setIngestionMode] = useState("video_transcript");
   const [videoFile, setVideoFile] = useState(null);
   const [transcriptFile, setTranscriptFile] = useState(null);
   const [transcriptText, setTranscriptText] = useState("");
@@ -50,22 +57,45 @@ export default function UploadCapture({
   const videoInputRef = useRef(null);
   const transcriptInputRef = useRef(null);
   const pollRef = useRef(null);
+  const pollStopTimeoutRef = useRef(null);
   const [previewImage, setPreviewImage] = useState(null);
+  const [assetList, setAssetList] = useState({ videos: [], documents: [] });
+  const [supportingFile, setSupportingFile] = useState(null);
+  const supportingFileInputRef = useRef(null);
+  const [assetBusyId, setAssetBusyId] = useState("");
+  const [videoPreviewOpen, setVideoPreviewOpen] = useState(false);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState("");
+  const [videoPreviewName, setVideoPreviewName] = useState("");
 
-  const headers = {
-    Authorization: `Bearer ${token}`,
-  };
+  const loadAssets = useCallback(async () => {
+    if (!projectId || !token) return;
+    try {
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/assets`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAssetList({
+          videos: data.videos || [],
+          documents: data.documents || [],
+        });
+      }
+    } catch (e) {
+      console.error("Failed to load assets", e);
+    }
+  }, [projectId, token, apiBase]);
 
 
   // Poll for capture updates
   const startPolling = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
+    if (pollStopTimeoutRef.current) clearTimeout(pollStopTimeoutRef.current);
     pollRef.current = setInterval(async () => {
       await refreshCaptures();
     }, 3000);
 
     // Stop after 5 minutes
-    setTimeout(() => {
+    pollStopTimeoutRef.current = setTimeout(() => {
       if (pollRef.current) clearInterval(pollRef.current);
     }, 300000);
   }, [refreshCaptures]);
@@ -85,8 +115,13 @@ export default function UploadCapture({
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      if (pollStopTimeoutRef.current) clearTimeout(pollStopTimeoutRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    loadAssets();
+  }, [loadAssets]);
 
   const statusIcon = (status) => {
     if (status === "done") return <CheckCircleIcon sx={{ color: "#4caf50", fontSize: 16 }} />;
@@ -106,7 +141,7 @@ export default function UploadCapture({
       try {
         const res = await fetch(`${apiBase}/api/brd/projects`, {
           method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ name: projectName, client_name: clientName, process_name: processName }),
         });
         if (res.ok) {
@@ -119,22 +154,29 @@ export default function UploadCapture({
         return;
       }
     }
-    // Now upload
+    if (ingestionMode === "transcript_only") {
+      await handleTranscriptOnly(currentId);
+      return;
+    }
+    // video_transcript or video_only
     handleUpload(currentId);
   };
 
   // Modified handleUpload to take ID directly
   const handleUpload = async (targetProjectId) => {
     const pid = targetProjectId || projectId;
-    if (!videoFile || !pid) return;
+    if (!pid) return;
+    if ((ingestionMode === "video_transcript" || ingestionMode === "video_only") && !videoFile) return;
 
     setUploading(true);
     setProcessingStatus("Uploading files...");
 
     const formData = new FormData();
     formData.append("video", videoFile);
-    if (transcriptFile) formData.append("transcript_file", transcriptFile);
-    else if (transcriptText.trim()) formData.append("transcript", transcriptText);
+    if (ingestionMode !== "video_only") {
+      if (transcriptFile) formData.append("transcript_file", transcriptFile);
+      else if (transcriptText.trim()) formData.append("transcript", transcriptText);
+    }
 
     try {
       const res = await fetch(`${apiBase}/api/brd/projects/${pid}/videos`, {
@@ -149,6 +191,7 @@ export default function UploadCapture({
         setTranscriptFile(null);
         setTranscriptText("");
         startPolling();
+        await loadAssets();
       } else {
         const err = await res.json();
         setProcessingStatus(`Error: ${err.detail || "Upload failed"}`);
@@ -157,6 +200,102 @@ export default function UploadCapture({
       setProcessingStatus(`Error: ${err.message}`);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleTranscriptOnly = async (targetProjectId) => {
+    const pid = targetProjectId || projectId;
+    if (!pid || !transcriptText.trim()) return;
+    setUploading(true);
+    setProcessingStatus("Uploading transcript-only evidence...");
+    try {
+      const res = await fetch(`${apiBase}/api/brd/projects/${pid}/transcript-only`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          transcript: transcriptText,
+          source_name: processName || projectName || "Transcript Input",
+        }),
+      });
+      if (res.ok) {
+        setTranscriptText("");
+        setProcessingStatus("Transcript evidence added successfully.");
+        await loadAssets();
+      } else {
+        const err = await res.json();
+        setProcessingStatus(`Error: ${err.detail || "Transcript upload failed"}`);
+      }
+    } catch (err) {
+      setProcessingStatus(`Error: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const uploadSupportingFile = async () => {
+    if (!supportingFile || !projectId) return;
+    const formData = new FormData();
+    formData.append("file", supportingFile);
+    try {
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/documents`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (res.ok) {
+        setSupportingFile(null);
+        await loadAssets();
+      }
+    } catch (e) {
+      console.error("Supporting file upload failed", e);
+    }
+  };
+
+  const openVideoPreview = (video) => {
+    if (!video?.video_url) return;
+    setVideoPreviewName(video.filename || "Video");
+    setVideoPreviewUrl(`${apiBase}${video.video_url}`);
+    setVideoPreviewOpen(true);
+  };
+
+  const deleteVideoAsset = async (video) => {
+    if (!projectId || !video?.id) return;
+    const ok = window.confirm(`Delete video "${video.filename}" and linked captures?`);
+    if (!ok) return;
+    setAssetBusyId(`video-${video.id}`);
+    try {
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/videos/${video.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        await loadAssets();
+        await refreshCaptures();
+      }
+    } catch (e) {
+      console.error("Failed to delete video asset", e);
+    } finally {
+      setAssetBusyId("");
+    }
+  };
+
+  const deleteDocumentAsset = async (doc) => {
+    if (!projectId || !doc?.id) return;
+    const ok = window.confirm(`Delete document "${doc.filename}"?`);
+    if (!ok) return;
+    setAssetBusyId(`doc-${doc.id}`);
+    try {
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/documents/${doc.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        await loadAssets();
+      }
+    } catch (e) {
+      console.error("Failed to delete document asset", e);
+    } finally {
+      setAssetBusyId("");
     }
   };
 
@@ -187,7 +326,45 @@ export default function UploadCapture({
           </Box>
         )}
 
+        <Box>
+          <Typography variant="caption" sx={{ color: "#8fa3c0", mb: 1, display: "block" }}>
+            Ingestion Mode
+          </Typography>
+          <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+            <Button
+              size="small"
+              variant={ingestionMode === "video_transcript" ? "contained" : "outlined"}
+              onClick={() => setIngestionMode("video_transcript")}
+              sx={{ textTransform: "none" }}
+            >
+              Video + Transcript
+            </Button>
+            <Button
+              size="small"
+              variant={ingestionMode === "video_only" ? "contained" : "outlined"}
+              onClick={() => setIngestionMode("video_only")}
+              sx={{ textTransform: "none" }}
+            >
+              Video Only
+            </Button>
+            <Button
+              size="small"
+              variant={ingestionMode === "transcript_only" ? "contained" : "outlined"}
+              onClick={() => setIngestionMode("transcript_only")}
+              sx={{ textTransform: "none" }}
+            >
+              Transcript Only
+            </Button>
+          </Box>
+          {ingestionMode === "video_only" && (
+            <Typography variant="caption" sx={{ color: "#8fa3c0", mt: 0.8, display: "block" }}>
+              Video-only mode starts capture/description immediately. You can upload transcript later for higher BRD accuracy.
+            </Typography>
+          )}
+        </Box>
+
         {/* Video Selection */}
+        {ingestionMode !== "transcript_only" && (
         <Box>
           <Typography variant="caption" sx={{ color: "#8fa3c0", mb: 1, display: "block" }}>Select Video Walkthrough</Typography>
           <input ref={videoInputRef} type="file" accept="video/*" hidden onChange={(e) => setVideoFile(e.target.files[0])} />
@@ -201,8 +378,10 @@ export default function UploadCapture({
             {videoFile ? videoFile.name : "Choose Video"}
           </Button>
         </Box>
+        )}
 
         {/* Transcript Area */}
+        {ingestionMode !== "video_only" && (
         <Box>
           <Typography variant="caption" sx={{ color: "#8fa3c0", mb: 1, display: "block" }}>Transcript (Paste or Upload File)</Typography>
           <TextField
@@ -230,11 +409,50 @@ export default function UploadCapture({
             <Button size="small" color="error" onClick={() => setTranscriptFile(null)} sx={{ fontSize: 9 }}>Remove</Button>
           )}
         </Box>
+        )}
+
+        {projectId && (
+          <Box>
+            <Typography variant="caption" sx={{ color: "#8fa3c0", mb: 1, display: "block" }}>
+              Additional BRD Supporting File (PDF/DOCX/TXT)
+            </Typography>
+            <input
+              ref={supportingFileInputRef}
+              type="file"
+              accept=".docx,.pdf,.txt"
+              hidden
+              onChange={(e) => setSupportingFile(e.target.files?.[0] || null)}
+            />
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<CloudUploadIcon />}
+              onClick={() => supportingFileInputRef.current?.click()}
+              sx={{ mb: 1, borderColor: "rgba(255,255,255,0.2)", color: "#8fa3c0" }}
+            >
+              {supportingFile ? supportingFile.name : "Select Supporting File"}
+            </Button>
+            <Button
+              variant="contained"
+              fullWidth
+              disabled={!supportingFile}
+              onClick={uploadSupportingFile}
+              sx={{ background: "#1F3864", fontWeight: 700 }}
+            >
+              Add to Project Assets
+            </Button>
+          </Box>
+        )}
 
         <Button
           variant="contained"
           onClick={createAndUpload}
-          disabled={uploading || !videoFile || (!projectId && !projectName.trim())}
+          disabled={
+            uploading ||
+            (!projectId && !projectName.trim()) ||
+            ((ingestionMode === "video_transcript" || ingestionMode === "video_only") && !videoFile) ||
+            (ingestionMode === "transcript_only" && !transcriptText.trim())
+          }
           startIcon={uploading ? <CircularProgress size={16} /> : <CloudUploadIcon />}
           sx={{
             py: 1.5,
@@ -243,13 +461,95 @@ export default function UploadCapture({
             fontSize: 14,
           }}
         >
-          {uploading ? "Processing..." : projectId ? "Upload & Analyze" : "Create & Start Analysis"}
+          {uploading ? "Processing..." : ingestionMode === "transcript_only" ? "Add Transcript Evidence" : (projectId ? "Upload & Analyze" : "Create & Start Analysis")}
         </Button>
 
         {processingStatus && (
           <Typography variant="caption" sx={{ color: "#F26522", textAlign: "center" }}>
             {processingStatus}
           </Typography>
+        )}
+
+        {projectId && (
+          <>
+            <Divider sx={{ opacity: 0.2 }} />
+            <Typography variant="caption" sx={{ color: "#8fa3c0", fontWeight: 700 }}>
+              Project Assets
+            </Typography>
+            <List dense sx={{ maxHeight: 220, overflowY: "auto", bgcolor: "rgba(255,255,255,0.02)", borderRadius: 1, border: "1px solid rgba(255,255,255,0.06)" }}>
+              {(assetList.videos || []).map((v) => (
+                <ListItem
+                  key={v.id}
+                  sx={{ py: 0.4, display: "flex", alignItems: "center", gap: 0.5 }}
+                  secondaryAction={
+                    <Box sx={{ display: "flex", alignItems: "center" }}>
+                      <Tooltip title="Play video">
+                        <IconButton
+                          size="small"
+                          onClick={() => openVideoPreview(v)}
+                          sx={{ color: "#8fa3c0" }}
+                        >
+                          <PlayArrowIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete video and linked captures">
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={() => deleteVideoAsset(v)}
+                            disabled={assetBusyId === `video-${v.id}`}
+                            sx={{ color: "#ef5350" }}
+                          >
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Box>
+                  }
+                >
+                  <ListItemText
+                    primary={v.filename}
+                    secondary={`Video · ${v.status}${v.has_transcript ? " · transcript" : ""}`}
+                    primaryTypographyProps={{ fontSize: 11, color: "#e8edf5" }}
+                    secondaryTypographyProps={{ fontSize: 10, color: "#8fa3c0" }}
+                  />
+                </ListItem>
+              ))}
+              {(assetList.documents || []).map((d) => (
+                <ListItem
+                  key={d.id}
+                  sx={{ py: 0.4, display: "flex", alignItems: "center", gap: 0.5 }}
+                  secondaryAction={
+                    <Tooltip title="Delete document">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => deleteDocumentAsset(d)}
+                          disabled={assetBusyId === `doc-${d.id}`}
+                          sx={{ color: "#ef5350" }}
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  }
+                >
+                  <ListItemText
+                    primary={d.filename}
+                    secondary={`Doc · ${d.has_text ? "indexed" : "uploaded"}`}
+                    primaryTypographyProps={{ fontSize: 11, color: "#e8edf5" }}
+                    secondaryTypographyProps={{ fontSize: 10, color: "#8fa3c0" }}
+                  />
+                </ListItem>
+              ))}
+              {((assetList.videos || []).length + (assetList.documents || []).length) === 0 && (
+                <ListItem><ListItemText primary="No assets yet." primaryTypographyProps={{ fontSize: 11, color: "#8fa3c0" }} /></ListItem>
+              )}
+            </List>
+            <Typography variant="caption" sx={{ mt: 0.8, color: "#8fa3c0", display: "block" }}>
+              Videos: {(assetList.videos || []).length} • Docs: {(assetList.documents || []).length}
+            </Typography>
+          </>
         )}
       </Box>
 
@@ -286,9 +586,9 @@ export default function UploadCapture({
 
             <Grid container spacing={1.5}>
               {captures.map((cap, idx) => (
-                <Grid item xs={6} sm={4} md={3} key={cap.id}>
+                <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }} key={cap.id}>
                   <Card
-                    onClick={() => setPreviewImage(`${apiBase}${cap.image_url}`)}
+                    onClick={() => cap.image_url && setPreviewImage(`${apiBase}${cap.image_url}`)}
                     sx={{
                       bgcolor: "rgba(17,34,64,0.4)",
                       border: "1px solid rgba(255,255,255,0.05)",
@@ -299,8 +599,8 @@ export default function UploadCapture({
                       "&:hover": { borderColor: "rgba(242,101,34,0.4)", transform: "translateY(-2px)", boxShadow: "0 4px 16px rgba(242,101,34,0.15)" },
                     }}
                   >
-                    <Box sx={{ position: "relative", width: "100%", pt: "56.25%", bgcolor: "#0a0e18" }}>
-                      {cap.image_url && (
+                    <Box sx={{ position: "relative", width: "100%", pt: "62%", bgcolor: "#0a0e18" }}>
+                      {cap.image_url ? (
                         <CardMedia
                           component="img"
                           image={`${apiBase}${cap.image_url}`}
@@ -314,6 +614,12 @@ export default function UploadCapture({
                             objectFit: "contain" 
                           }}
                         />
+                      ) : (
+                        <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Typography variant="caption" sx={{ color: "#8fa3c0" }}>
+                            Preview unavailable
+                          </Typography>
+                        </Box>
                       )}
                       {/* Index badge */}
                       <Box sx={{ position: "absolute", top: 6, left: 6, bgcolor: "#1F3864", color: "#fff", px: 0.8, py: 0.2, borderRadius: 0.8, fontSize: '9px', fontWeight: 800 }}>
@@ -321,6 +627,9 @@ export default function UploadCapture({
                       </Box>
                     </Box>
                     <CardContent sx={{ p: 0.8, "&:last-child": { pb: 0.8 } }}>
+                      <Typography noWrap sx={{ color: "#dce6f7", fontWeight: 700, fontSize: 11, mb: 0.4 }}>
+                        {cap.label || `Frame ${idx + 1}`}
+                      </Typography>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                         {statusIcon(cap.llm_status)}
                         <Typography variant="caption" noWrap sx={{ color: "#8fa3c0", fontSize: 9, flex: 1 }}>
@@ -387,6 +696,22 @@ export default function UploadCapture({
             />
           )}
         </DialogContent>
+      </Dialog>
+
+      <Dialog open={videoPreviewOpen} onClose={() => setVideoPreviewOpen(false)} maxWidth="lg" fullWidth>
+        <DialogTitle sx={{ color: "#e8edf5", bgcolor: "#112240" }}>{videoPreviewName}</DialogTitle>
+        <DialogContent sx={{ p: 0, bgcolor: "#000" }}>
+          {videoPreviewUrl ? (
+            <video src={videoPreviewUrl} controls style={{ width: "100%", maxHeight: "72vh", display: "block" }} />
+          ) : (
+            <Box sx={{ p: 4, color: "#fff" }}>Video unavailable</Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: "#112240" }}>
+          <Button onClick={() => setVideoPreviewOpen(false)} sx={{ color: "#8fa3c0" }}>
+            Close
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

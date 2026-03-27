@@ -29,6 +29,7 @@ import {
   ListItemText,
   Chip,
   Grid,
+  Alert,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
@@ -36,6 +37,7 @@ import HistoryIcon from "@mui/icons-material/History";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
 // Section mapping to match template numbering exactly
 const SECTION_CONFIG = [
@@ -281,6 +283,11 @@ export default function DocumentEditor({
     ba_name: projectData?.ba_name || "",
     process_name: projectData?.process_name || projectData?.name || "",
   });
+  const [regenAdvice, setRegenAdvice] = useState(null);
+  const [editorSession, setEditorSession] = useState(null);
+  const [editorDialogOpen, setEditorDialogOpen] = useState(false);
+  const [latestEditorDoc, setLatestEditorDoc] = useState(null);
+  const [enterpriseLoading, setEnterpriseLoading] = useState(false);
 
   useEffect(() => {
     if (projectData) {
@@ -291,6 +298,23 @@ export default function DocumentEditor({
       });
     }
   }, [projectData]);
+
+  useEffect(() => {
+    const fetchAdvice = async () => {
+      if (!projectId) return;
+      try {
+        const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/regeneration-recommendation`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          setRegenAdvice(await res.json());
+        }
+      } catch (e) {
+        console.error("Failed to load regeneration recommendation", e);
+      }
+    };
+    fetchAdvice();
+  }, [projectId, token, apiBase, sections, captures]);
 
   const updateMeta = async (field, value) => {
     setMeta(prev => ({ ...prev, [field]: value }));
@@ -367,6 +391,66 @@ export default function DocumentEditor({
     setVersionDialog(null);
   };
 
+  const openEnterpriseEditor = async () => {
+    try {
+      setEnterpriseLoading(true);
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/editor/session`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setEditorSession(data);
+      if (data.enabled && data.editor_url) {
+        setEditorDialogOpen(true);
+      }
+    } catch (e) {
+      console.error("Failed to open enterprise editor session", e);
+    } finally {
+      setEnterpriseLoading(false);
+    }
+  };
+
+  const ensureEnterpriseSession = useCallback(async () => {
+    if (!projectId || !token) return;
+    try {
+      setEnterpriseLoading(true);
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/editor/session`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setEditorSession(data);
+    } catch (e) {
+      console.error("Failed to initialize enterprise editor session", e);
+    } finally {
+      setEnterpriseLoading(false);
+    }
+  }, [projectId, token, apiBase]);
+
+  const loadLatestEditorDoc = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/editor/latest`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setLatestEditorDoc(data?.found ? data : null);
+    } catch (e) {
+      console.error("Failed to load latest enterprise editor document", e);
+    }
+  }, [projectId, apiBase, token]);
+
+  useEffect(() => {
+    loadLatestEditorDoc();
+  }, [loadLatestEditorDoc]);
+
+  useEffect(() => {
+    ensureEnterpriseSession();
+  }, [ensureEnterpriseSession]);
+
   const sortedSections = useMemo(() => {
     return [...sections].sort((a, b) => {
       const aIdx = SECTION_ORDER.indexOf(a.section_key);
@@ -384,6 +468,22 @@ export default function DocumentEditor({
         {sections.length > 0 ? (
           <>
             <Button variant="outlined" size="small" onClick={() => handleGenerate(true)} disabled={generating} startIcon={<RefreshIcon />} sx={{ borderColor: "rgba(242,101,34,0.5)", color: "#F26522" }}>Regenerate All</Button>
+            <Button variant="outlined" size="small" onClick={openEnterpriseEditor} startIcon={<OpenInNewIcon />} sx={{ borderColor: "rgba(31,56,100,0.5)", color: "#1F3864", bgcolor: "#fff" }}>
+              Open Enterprise Editor
+            </Button>
+            {latestEditorDoc?.download_url && (
+              <Button
+                variant="outlined"
+                size="small"
+                component="a"
+                href={`${apiBase}${latestEditorDoc.download_url}`}
+                target="_blank"
+                rel="noreferrer"
+                sx={{ borderColor: "rgba(31,56,100,0.28)", color: "#1F3864", bgcolor: "#fff" }}
+              >
+                Open Latest Edited DOCX
+              </Button>
+            )}
             <Button variant="contained" size="small" onClick={onNext} endIcon={<FileDownloadIcon />} sx={{ background: "#F26522", fontWeight: 700 }}>Download Doc</Button>
           </>
         ) : (
@@ -391,113 +491,57 @@ export default function DocumentEditor({
         )}
       </Box>
 
-      {/* Viewport */}
-      <Box sx={{ flex: 1, overflowY: "auto", py: 6, display: "flex", justifyContent: "center", bgcolor: "#f0f2f5" }}>
-        <Box sx={{ width: "8.5in", display: "flex", flexDirection: "column", gap: 6, pb: 10 }}>
-          {/* Cover Page */}
-          <Paper 
-            elevation={4} 
-            sx={{ 
-              p: "1in", 
-              minHeight: "11in", 
-              bgcolor: "#fff", 
-              position: "relative", 
-              borderRadius: "2px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.08)"
-            }}
-          >
-            <Box sx={{ position: "absolute", top: "0.5in", right: "0.5in" }}><img src="/ae-icon.png" alt="AE" style={{ width: "0.5in" }} /></Box>
-            <Box sx={{ mt: "3.5in", textAlign: "center" }}>
-              <Typography variant="h3" sx={{ color: "#1F3864", fontWeight: 900, mb: 2, letterSpacing: -1 }}>Business Requirements Document</Typography>
-              <TextField variant="standard" fullWidth value={meta.process_name} onChange={(e) => updateMeta("process_name", e.target.value)} InputProps={{ disableUnderline: true, sx: { fontSize: "1.8rem", color: "#F26522", fontWeight: 700 } }} inputProps={{ style: { textAlign: 'center' } }} />
-              
-              <Grid container spacing={4} sx={{ mt: 10, textAlign: "left", px: 6 }}>
-                <Grid item xs={4}><Typography sx={{ fontWeight: 800, color: "#1F3864", fontSize: '0.85rem' }}>CLIENT</Typography></Grid>
-                <Grid item xs={8}><TextField variant="standard" fullWidth value={meta.client_name} onChange={(e) => updateMeta("client_name", e.target.value)} InputProps={{ disableUnderline: true, sx: { fontSize: "11pt", borderBottom: "1px solid #eee" }}} /></Grid>
-                <Grid item xs={4}><Typography sx={{ fontWeight: 800, color: "#1F3864", fontSize: '0.85rem' }}>BA</Typography></Grid>
-                <Grid item xs={8}><TextField variant="standard" fullWidth value={meta.ba_name} onChange={(e) => updateMeta("ba_name", e.target.value)} InputProps={{ disableUnderline: true, sx: { fontSize: "11pt", borderBottom: "1px solid #eee" }}} /></Grid>
-                <Grid item xs={4}><Typography sx={{ fontWeight: 800, color: "#1F3864", fontSize: '0.85rem' }}>DATE</Typography></Grid>
-                <Grid item xs={8}><Typography sx={{ fontSize: "11pt" }}>{new Date().toLocaleDateString('en-GB')}</Typography></Grid>
-              </Grid>
-            </Box>
-            <Box sx={{ position: "absolute", bottom: "0.5in", left: "1in", right: "1in", borderTop: "2px solid #1F3864", pt: 1, display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="caption" sx={{ fontWeight: 700, color: '#1F3864' }}>AutomationEdge Confidential</Typography>
-              <Typography variant="caption" sx={{ color: '#888' }}>Page 1 of {sortedSections.length + 2}</Typography>
-            </Box>
-          </Paper>
-
-          {/* Table of Contents Page */}
-          <Paper 
-            elevation={4} 
-            sx={{ 
-              p: "1in", 
-              maxWidth: "210mm",
-              width: "100%",
-              minHeight: "11in", 
-              bgcolor: "#fff", 
-              borderRadius: "2px",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-              overflow: "hidden",
-            }}
-          >
-            <Typography variant="h5" sx={{ color: "#1F3864", fontWeight: 800, mb: 4, letterSpacing: 1 }}>TABLE OF CONTENTS</Typography>
-            <List>
-              {sortedSections.map((s, i) => (
-                <ListItem key={s.id} sx={{ p: 0, py: 0.6 }}>
-                  <ListItemText 
-                    primary={`${SECTION_CONFIG.find(c=>c.key===s.section_key)?.label || s.title}`} 
-                    primaryTypographyProps={{ sx: { fontSize: "10pt", fontWeight: 600, color: "#444" }}} 
-                  />
-                  <Box sx={{ flex: 1, borderBottom: '1px dotted #ccc', mx: 2, mb: 0.5 }} />
-                  <Typography variant="caption" sx={{ color: "#888", fontWeight: 600 }}>P {i + 2}</Typography>
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
-
-          {/* Content Pages — one Paper per section for proper page feel */}
-          {sortedSections.map((sec, idx) => (
-            <Paper 
-              key={sec.id}
-              elevation={4} 
-              sx={{ 
-                px: "1in", 
-                pt: "1in",
-                pb: "1.2in",
-                maxWidth: "210mm",
-                width: "100%",
-                minHeight: "11in", 
-                bgcolor: "#fff", 
-                borderRadius: "2px",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-                overflowWrap: "break-word",
-                wordBreak: "break-word",
-                position: "relative",
-              }}
+      {regenAdvice?.should_regenerate && (
+        <Alert
+          severity="info"
+          sx={{ mx: 2, mt: 1 }}
+          action={
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => handleGenerate(true)}
+              sx={{ background: "#F26522", fontWeight: 700 }}
             >
-              {/* Page header */}
-              <Box sx={{ position: "absolute", top: "0.4in", right: "0.5in" }}>
-                <img src="/ae-icon.png" alt="AE" style={{ width: "0.4in", opacity: 0.5 }} />
-              </Box>
+              Regenerate BRD
+            </Button>
+          }
+        >
+          {regenAdvice.reasons?.[0] || "Project evidence changed. Regenerate to include latest updates."}
+        </Alert>
+      )}
 
-              <SectionBlock 
-                section={sec} 
-                index={idx} 
-                apiBase={apiBase} 
-                token={token}
-                onRefine={setRefineDialog}
-                onHistory={openVersionHistory}
-                captures={captures}
-              />
-
-              {/* Page footer — at bottom of content, not absolutely positioned */}
-              <Box sx={{ mt: 'auto', pt: 4, borderTop: "1px solid #e0e6ed", display: "flex", justifyContent: "space-between" }}>
-                <Typography variant="caption" sx={{ color: '#aaa', fontSize: '8pt' }}>AutomationEdge Confidential</Typography>
-                <Typography variant="caption" sx={{ color: '#aaa', fontSize: '8pt' }}>Page {idx + 3}</Typography>
-              </Box>
-            </Paper>
-          ))}
-        </Box>
+      {/* Viewport: Enterprise editor first-class */}
+      <Box sx={{ flex: 1, display: "flex", bgcolor: "#0A1628" }}>
+        {enterpriseLoading ? (
+          <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 1.5, color: "#8fa3c0" }}>
+            <CircularProgress size={18} />
+            <Typography variant="body2">Loading final BRD editor...</Typography>
+          </Box>
+        ) : editorSession?.enabled && editorSession?.editor_url ? (
+          <iframe
+            src={editorSession.editor_url}
+            title="Enterprise DOCX Editor"
+            style={{ width: "100%", height: "100%", border: "none" }}
+          />
+        ) : (
+          <Box sx={{ flex: 1, p: 3 }}>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Enterprise editor is not enabled in backend configuration. Step 3 requires enterprise editor mode.
+            </Alert>
+            {editorSession?.download_url && (
+              <Button
+                component="a"
+                href={`${apiBase}${editorSession.download_url}`}
+                target="_blank"
+                rel="noreferrer"
+                variant="contained"
+                sx={{ background: "#F26522", fontWeight: 700 }}
+              >
+                Open Latest Mapped DOCX
+              </Button>
+            )}
+          </Box>
+        )}
       </Box>
 
       {/* Dialogs */}
@@ -517,6 +561,40 @@ export default function DocumentEditor({
         <DialogTitle sx={{ color: "#fff" }}>AI Refine</DialogTitle>
         <DialogContent><TextField fullWidth multiline rows={4} value={refineInstruction} onChange={(e) => setRefineInstruction(e.target.value)} placeholder="How should AI change this section?" sx={{ mt: 1, bgcolor: "#fff", borderRadius: 1 }} /></DialogContent>
         <DialogActions sx={{ p: 2 }}><Button onClick={() => setRefineDialog(null)} sx={{ color: "#8fa3c0" }}>Cancel</Button><Button variant="contained" onClick={handleRefine} disabled={generating} sx={{ bgcolor: "#F26522" }}>Refine Content</Button></DialogActions>
+      </Dialog>
+
+      <Dialog open={editorDialogOpen} onClose={() => setEditorDialogOpen(false)} maxWidth="xl" fullWidth>
+        <DialogTitle>Enterprise DOCX Editor</DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          {editorSession?.enabled && editorSession?.editor_url ? (
+            <iframe
+              src={editorSession.editor_url}
+              title="Enterprise DOCX Editor"
+              style={{ width: "100%", height: "78vh", border: "none" }}
+            />
+          ) : (
+            <Box sx={{ p: 3 }}>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Enterprise editor is not enabled on server configuration yet.
+              </Alert>
+              {editorSession?.download_url && (
+                <Button
+                  component="a"
+                  href={`${apiBase}${editorSession.download_url}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="contained"
+                >
+                  Open Latest DOCX
+                </Button>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={loadLatestEditorDoc}>Check Latest Saved Copy</Button>
+          <Button onClick={() => setEditorDialogOpen(false)}>Close</Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

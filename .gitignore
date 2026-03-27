@@ -49,3 +49,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 docker-debug.log*
+
+brd_studio_data/
