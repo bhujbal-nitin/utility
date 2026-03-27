@@ -107,14 +107,18 @@ Evidence:
 Write the **Business Process Detailed Description** section.
 
 STRICT REQUIREMENTS:
-- Be EXTREMELY VERBOSE and exhaustive.
-- For EVERY screen identified in the evidence:
-  1. Screen Name
-  2. Screen Image: [IMAGE_REF:cap_xyz] 
-  3. Screen Function/Description: Use the provided narrative context to describe what is happening in the capture.
-  4. Narrative Flow: Interleave images with detailed descriptions of User Action, Business Logic, Data I/O, and Validations.
-- Use markdown headers (### Heading), NOT numeric headers.
-- Ensure all If/Then logic is clearly bulleted.
+- This section must read like a clean client-facing *screen sequence + step list*, not a technical dump.
+- Keep it **concise** and avoid over-explaining UI clickstream minutiae.
+- Do NOT include long OCR transcripts or field-by-field transcription.
+- Do NOT include deep Input/Output tables, validations, exceptions, or rules here — those belong to Sections 6, 10, 11, and 12.
+
+OUTPUT FORMAT:
+- Use repeated blocks like:
+  - `### <Screen / Step Group Title>`
+  - 3–8 bullet steps underneath.
+  - If a screenshot is relevant, include it inline as its own line: `[IMAGE_REF:<capture_id>]`
+- Each bullet step should be 1–2 lines max and written as an action/outcome statement (what happens on this screen).
+- If the evidence shows conditional branching, represent it with 1–3 short bullets using "If … then …" (do not expand).
 
 Evidence:
 {evidence_pack}

@@ -118,6 +118,70 @@ class BRDPipeline:
 
         return "\n".join(parts)
 
+    def build_evidence_pack_for_section(
+        self,
+        section_key: str,
+        captures: List[Dict],
+        transcripts: List[Dict],
+        documents: List[Dict],
+    ) -> str:
+        """
+        Section-specific evidence shaping.
+
+        Rationale:
+        - Section 9 (process_detail) should be a readable screen sequence, not a raw
+          OCR/UI dump. We therefore provide a capture-focused, concise evidence pack.
+        - Other sections can use the full unified evidence pack.
+        """
+        if section_key != "process_detail":
+            return self.build_evidence_pack(captures, transcripts, documents)
+
+        parts: List[str] = []
+        kept = [c for c in captures if c.get("is_kept", True)]
+        if kept:
+            parts.append("## SCREEN CAPTURES (ORDERED)")
+            parts.append(
+                "Use these captures to infer the screen sequence and write concise step bullets. "
+                "Do NOT transcribe every field or include long clickstreams."
+            )
+            for idx, cap in enumerate(sorted(kept, key=lambda c: (c.get("timestamp", 0), c.get("id", "")))):
+                cap_id = cap.get("id", "")
+                label = cap.get("label") or f"Step {idx + 1}"
+                desc = (cap.get("description") or "").strip()
+                # Keep description short; it is meant to guide grouping, not to be copied verbatim.
+                if len(desc) > 420:
+                    desc = desc[:417].rstrip() + "..."
+                parts.append(f'\n### [IMAGE_REF:{cap_id}] - {label}')
+                if desc:
+                    parts.append(f"- Visual Summary: {desc}")
+
+                details = cap.get("details_json") or {}
+                app = (details.get("app_name") or "").strip()
+                title = (details.get("page_title") or "").strip()
+                if app or title:
+                    bits = []
+                    if app:
+                        bits.append(app)
+                    if title:
+                        bits.append(title)
+                    parts.append(f"- Screen Context: {' — '.join(bits)}")
+
+        # Provide light transcript context (optional) to avoid hallucinated steps,
+        # but keep it short so Section 9 stays readable.
+        if transcripts:
+            short_tx = []
+            for t in sorted(transcripts, key=lambda t: (t.get("order", 10**9), t.get("filename", ""))):
+                text = (t.get("transcript_text") or "").strip()
+                if not text:
+                    continue
+                short_tx.append(f"### Recording: {t.get('filename', 'Walkthrough')}\n{text[:2200]}")
+            if short_tx:
+                parts.append("\n## TRANSCRIPT (ABRIDGED)")
+                parts.extend(short_tx[:1])  # keep only the first transcript blob to control size
+
+        # Additional docs are generally not needed for Section 9 step narration.
+        return "\n".join(parts).strip()
+
     def build_evidence_manifest(
         self,
         captures: List[Dict],
@@ -326,7 +390,7 @@ graph TD
         """
         Generate all or specific BRD sections from evidence.
         """
-        # 1. Build evidence pack
+        # 1. Build evidence pack (full) for manifest/logging; generation can use section-specific shaping.
         evidence_pack = self.build_evidence_pack(captures, videos, documents)
         manifest = self.build_evidence_manifest(captures, videos, documents)
         logger.info("Evidence manifest: %s", manifest)
@@ -346,7 +410,8 @@ graph TD
 
                 # The section prompts for flow_existing/flow_proposed already
                 # include Mermaid diagram generation instructions.
-                content = await self.generate_section(key, evidence_pack, mode, instruction)
+                section_evidence = self.build_evidence_pack_for_section(key, captures, videos, documents)
+                content = await self.generate_section(key, section_evidence, mode, instruction)
 
                 # Fallback: if flow sections came back without a Mermaid diagram,
                 # generate one explicitly
