@@ -96,48 +96,45 @@ export default function UploadCapture({
     if (pollStopTimeoutRef.current) clearTimeout(pollStopTimeoutRef.current);
     pollRef.current = setInterval(async () => {
       await refreshCaptures();
+      try {
+        if (!projectId || !token) return;
+        const statusRes = await fetch(`${apiBase}/api/brd/projects/${projectId}/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!statusRes.ok) return;
+        const statusData = await statusRes.json();
+        const videosProcessing = statusData?.videos?.processing ?? 0;
+        if (videosProcessing === 0) {
+          if (pollRef.current) clearInterval(pollRef.current);
+          pollRef.current = null;
+          setCaptureProcessing(false);
+          setProcessingStatus("Frame capture complete. AI description is on-demand in Step 2.");
+        }
+      } catch (e) {
+        // Ignore status poll errors; capture polling will still refresh frames.
+      }
     }, 3000);
 
     // Stop after 5 minutes
     pollStopTimeoutRef.current = setTimeout(() => {
       if (pollRef.current) clearInterval(pollRef.current);
     }, 300000);
-  }, [refreshCaptures]);
+  }, [refreshCaptures, projectId, token, apiBase]);
 
-  // Check if all captures are done
-  const allCapturesDone = captures.length > 0 && captures.every((c) => c.llm_status !== "processing" && c.llm_status !== "pending");
-
-  const capturesInProgress = captures.some((c) => c.llm_status === "processing" || c.llm_status === "pending");
-  const uiBusy = uploading || captureProcessing || capturesInProgress;
-
-  // Stop polling when all captures are done (in useEffect, not during render)
-  useEffect(() => {
-    if (allCapturesDone && pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-      setCaptureProcessing(false);
-      setProcessingStatus("Frame capture + analysis complete.");
-    }
-  }, [allCapturesDone]);
+  const uiBusy = uploading || captureProcessing;
 
   // Let the parent block step navigation while processing is active.
   useEffect(() => {
     if (onBusyChange) onBusyChange(uiBusy || canceling);
   }, [uiBusy, canceling, onBusyChange]);
 
-  // Update overlay messaging while the backend is extracting frames + describing them.
+  // Update overlay messaging while the backend is extracting + cropping frames.
   useEffect(() => {
     if (!captureProcessing || canceling) return;
     if (String(processingStatus || "").startsWith("Error:")) return;
-    if (captures.length === 0) {
-      setProcessingStatus("Extracting frames...");
-      return;
-    }
-    if (capturesInProgress) {
-      setProcessingStatus("Analyzing frames with AI...");
-      return;
-    }
-  }, [captureProcessing, canceling, captures.length, capturesInProgress]);
+    if (captures.length === 0) setProcessingStatus("Extracting frames...");
+    else setProcessingStatus("Cropping + queuing frames...");
+  }, [captureProcessing, canceling, captures.length]);
 
   // During processing, block modal interactions by closing dialogs immediately.
   useEffect(() => {
@@ -726,7 +723,13 @@ export default function UploadCapture({
                       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                         {statusIcon(cap.llm_status)}
                         <Typography variant="caption" noWrap sx={{ color: "#8fa3c0", fontSize: 9, flex: 1 }}>
-                          {cap.llm_status === "done" ? "Described" : cap.llm_status === "processing" ? "Analyzing..." : cap.llm_status}
+                          {cap.llm_status === "done"
+                            ? "Described"
+                            : cap.llm_status === "processing"
+                              ? "Describing..."
+                              : cap.llm_status === "pending"
+                                ? "Cropped (AI pending)"
+                                : cap.llm_status}
                         </Typography>
                         {cap.timestamp > 0 && (
                           <Typography variant="caption" sx={{ color: "#556", fontSize: 8 }}>
@@ -742,10 +745,10 @@ export default function UploadCapture({
 
             {/* Progress & Bottom Action */}
             <Box sx={{ mt: 4, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-              {captures.length > 0 && !allCapturesDone && (
+              {captures.length > 0 && captureProcessing && (
                 <Box sx={{ width: "100%", maxWidth: 300 }}>
                   <Typography variant="caption" sx={{ color: "#F26522", mb: 1, display: "block", textAlign: "center" }}>
-                    Analyzing frames...
+                    Capturing + cropping frames...
                   </Typography>
                   <LinearProgress sx={{ borderRadius: 4, height: 6, bgcolor: "rgba(242,101,34,0.1)", "& .MuiLinearProgress-bar": { bgcolor: "#F26522" } }} />
                 </Box>
@@ -754,7 +757,7 @@ export default function UploadCapture({
               {captures.length > 0 && (
                 <Button
                   variant="contained"
-                  endIcon={!allCapturesDone ? <CircularProgress size={16} /> : <NavigateNextIcon />}
+                  endIcon={captureProcessing ? <CircularProgress size={16} /> : <NavigateNextIcon />}
                   onClick={onNext}
                   disabled={uiBusy || canceling}
                   sx={{
@@ -766,7 +769,7 @@ export default function UploadCapture({
                     boxShadow: "0 8px 24px rgba(242,101,34,0.3)",
                   }}
                 >
-                  {allCapturesDone ? `Review & Edit (${captures.length} Frames)` : "Proceed to Review (Analyzing...)"}
+                  {captureProcessing ? "Proceed to Review (Capturing...)" : `Review & Edit (${captures.length} Frames)`}
                 </Button>
               )}
             </Box>
@@ -781,7 +784,7 @@ export default function UploadCapture({
             position: "absolute",
             inset: 0,
             zIndex: 2000,
-            bgcolor: "rgba(0,0,0,0.55)",
+            bgcolor: "rgba(0,0,0,0.35)",
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -798,7 +801,8 @@ export default function UploadCapture({
             </Typography>
           </Box>
           <Typography sx={{ color: "#8fa3c0", fontSize: 13, maxWidth: 520, lineHeight: 1.6 }}>
-            {processingStatus || (captureProcessing ? "Extracting frames..." : "Analyzing...")}
+            {processingStatus ||
+              (uploading ? "Uploading files..." : "Cropping + queuing frames...")}
           </Typography>
           {uiBusy && !canceling ? (
             <Button

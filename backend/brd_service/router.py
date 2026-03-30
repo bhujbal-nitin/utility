@@ -35,7 +35,12 @@ from auth_service.models import User, RoleEnum
 from brd_service.models import (
     BrdProject, BrdVideo, BrdCapture, BrdSection, BrdVersion, BrdDocument
 )
-from brd_service.video_processor import smart_capture, get_video_duration
+from brd_service.video_processor import (
+    extract_frames_scene_detect,
+    extract_frames_interval,
+    postprocess_frames_iter,
+    get_video_duration,
+)
 from brd_service.frame_describer import frame_describer
 from brd_service.brd_pipeline import brd_pipeline
 from brd_service.export_service import ExportService
@@ -467,7 +472,7 @@ async def add_custom_capture(
     user: User = Depends(brd_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload a custom screenshot — triggers LLM description."""
+    """Upload a custom screenshot — crops/sanitizes and queues description (on-demand in Step 2)."""
     _rate_limit_or_429(user.id, "add_custom_capture", limit=120, window_sec=300)
     _assert_safe_file_upload(image, allowed_ext={".jpg", ".jpeg", ".png", ".webp"})
     await _get_project_or_404(db, project_id, user.id)
@@ -522,15 +527,42 @@ async def add_custom_capture(
         order=insert_pos + 1,
         label=label,
         is_custom=True,
-        llm_status="processing",
+        llm_status="pending",
         edits_json={"auto_crop": frame_meta.get("auto_crop")} if frame_meta.get("auto_crop") else {},
     )
     db.add(capture)
     await db.commit()
     await db.refresh(capture)
 
+    return _capture_to_dict(capture)
+
+
+@router.post("/captures/{capture_id}/describe")
+async def describe_single_capture(
+    capture_id: str,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger LLM description for a single capture (Step 2 per-image button)."""
+    capture = await _get_capture_for_user_or_404(db, capture_id, user.id)
+    if not capture.image_path or not os.path.exists(capture.image_path):
+        raise HTTPException(status_code=400, detail="Capture image is missing.")
+
+    # If already running, just return current state.
+    if capture.llm_status == "processing":
+        return _capture_to_dict(capture)
+
+    # Reset any prior partial text (so user sees fresh generation when it completes).
+    capture.ocr_text = ""
+    capture.description = ""
+    capture.details_json = dict(capture.details_json or {})
+    capture.llm_status = "processing"
+    await db.commit()
+    await db.refresh(capture)
+
     # Background LLM description
-    background_tasks.add_task(_describe_single_capture, capture_id, img_path, db)
+    background_tasks.add_task(_describe_single_capture, capture_id, capture.image_path, db)
 
     return _capture_to_dict(capture)
 
@@ -1045,6 +1077,14 @@ async def get_project_status(
     )
     processing_captures = processing_result.scalar() or 0
 
+    video_processing_result = await db.execute(
+        select(func.count(BrdVideo.id)).where(
+            BrdVideo.project_id == project_id,
+            BrdVideo.status == "processing",
+        )
+    )
+    videos_processing = video_processing_result.scalar() or 0
+
     sec_result = await db.execute(
         select(func.count(BrdSection.id)).where(BrdSection.project_id == project_id)
     )
@@ -1054,6 +1094,7 @@ async def get_project_status(
         "project_id": project_id,
         "status": project.status,
         "captures": {"total": total_captures, "processing": processing_captures},
+        "videos": {"processing": videos_processing},
         "sections": total_sections,
     }
 
@@ -1544,7 +1585,7 @@ async def _process_video_captures(
     video_path: str,
     db: AsyncSession,
 ):
-    """Background: Extract frames + generate LLM descriptions."""
+    """Background: Extract frames + crop/filter; AI descriptions are on-demand in Step 2."""
     from core.db import AsyncSessionLocal
 
     async with AsyncSessionLocal() as session:
@@ -1561,54 +1602,69 @@ async def _process_video_captures(
                 return
 
             t0 = time.perf_counter()
-            # 1. Smart capture (scene detect → fallback)
-            # Save directly under project_id for flat serving structure
+            # 1) Extract frames (scene-detect → interval fallback)
             frames_dir = os.path.join(BRD_FRAMES_DIR, project_id)
             os.makedirs(frames_dir, exist_ok=True)
-            
-            # Temporary directory for this video's extraction to avoid mixups before prefixing
+
             with tempfile.TemporaryDirectory() as tmp_dir:
-                frames = await smart_capture(
-                    video_path,
-                    tmp_dir,
-                    min_interval_sec=float(settings.BRD_MIN_CAPTURE_INTERVAL_SEC or 1.5),
-                    max_frames=int(settings.BRD_MAX_CAPTURE_FRAMES or 36),
-                )
                 if await _is_cancelled():
                     return
 
-                frames = sorted(frames, key=lambda f: (float(f.get("timestamp", 0.0)), f.get("filename", "")))
-                logger.info("Video %s capture extraction complete: %s frames in %.2fs", video_id, len(frames), time.perf_counter() - t0)
+                raw_frames = await extract_frames_scene_detect(
+                    video_path,
+                    tmp_dir,
+                    min_interval=float(settings.BRD_MIN_CAPTURE_INTERVAL_SEC or 1.5),
+                    max_frames=int(settings.BRD_MAX_CAPTURE_FRAMES or 36),
+                )
+
+                # If too few frames, fallback to interval extraction.
+                if len(raw_frames) < 5:
+                    raw_frames = await extract_frames_interval(
+                        video_path,
+                        tmp_dir,
+                        max_frames=int(settings.BRD_MAX_CAPTURE_FRAMES or 36),
+                    )
+
+                raw_frames = sorted(
+                    raw_frames,
+                    key=lambda f: (float(f.get("timestamp", 0.0)), f.get("filename", "")),
+                )
+
+                logger.info(
+                    "Video %s extracted %s raw frames in %.2fs",
+                    video_id,
+                    len(raw_frames),
+                    time.perf_counter() - t0,
+                )
 
                 # Build transcript segments for +/-5 context windowing.
                 vid_result = await session.execute(select(BrdVideo).where(BrdVideo.id == video_id))
                 video_rec = vid_result.scalar_one_or_none()
                 transcript_segments = (video_rec.transcript_segments or []) if video_rec else []
 
-                # 2. Rename and create capture records
-                capture_records = []
-                for frame in frames:
+                # 2) Crop + filter frames, persist capture records incrementally (live UI).
+                inserted = 0
+                for frame in postprocess_frames_iter(raw_frames):
                     if await _is_cancelled():
                         return
 
-                    # Prefix with video_id to ensure uniqueness in the project's flat folder
                     new_filename = f"{video_id}_{frame['filename']}"
                     new_path = os.path.join(frames_dir, new_filename)
                     os.rename(frame["path"], new_path)
 
-                    # Place in strict timestamp position across existing project captures.
                     existing_result = await session.execute(
                         select(BrdCapture)
                         .where(BrdCapture.project_id == project_id)
                         .order_by(BrdCapture.order.asc(), BrdCapture.timestamp.asc(), BrdCapture.id.asc())
                     )
                     existing_caps = existing_result.scalars().all()
+
                     insert_pos = 0
                     frame_ts = float(frame.get("timestamp", 0.0))
                     for i, cap in enumerate(existing_caps):
                         if float(cap.timestamp or 0.0) <= frame_ts:
                             insert_pos = i + 1
-                    # Shift order for records at and after insertion position.
+
                     for cap in existing_caps[insert_pos:]:
                         cap.order = int(cap.order or 0) + 1
 
@@ -1620,56 +1676,28 @@ async def _process_video_captures(
                         timestamp=frame_ts,
                         order=insert_pos + 1,
                         label=f"Frame {insert_pos + 1}",
-                        llm_status="processing",
+                        llm_status="pending",
                         edits_json={"auto_crop": frame.get("auto_crop")} if frame.get("auto_crop") else {},
                         details_json={"transcript_context_window": ctx_window},
                     )
                     session.add(capture)
                     await session.flush()
-                    capture_records.append(capture)
+                    inserted += 1
+                    await session.commit()  # persist incrementally for live Step 1 UI
 
-            await session.commit()
+                # 3) Update video status
+                result = await session.execute(select(BrdVideo).where(BrdVideo.id == video_id))
+                video = result.scalar_one_or_none()
+                if video:
+                    video.status = "ready"
+                await session.commit()
 
-            # 3. Async LLM descriptions in batch with concurrency control.
-            if await _is_cancelled():
-                return
-
-            frame_jobs = []
-            transcript_context_by_frame: dict[str, list[dict]] = {}
-            for capture in capture_records:
-                context_window = (capture.details_json or {}).get("transcript_context_window") or []
-                frame_jobs.append({"id": capture.id, "path": capture.image_path})
-                transcript_context_by_frame[capture.id] = context_window
-
-            desc_results = await frame_describer.describe_frames_batch(
-                frame_jobs,
-                transcript_context_by_frame=transcript_context_by_frame,
-            )
-            if await _is_cancelled():
-                return
-
-            for capture, desc in zip(capture_records, desc_results):
-                capture.ocr_text = desc.get("ocr_text", "")
-                capture.description = desc.get("description", "")
-                capture.details_json = {**(capture.details_json or {}), **desc}
-                has_error = str(capture.description or "").lower().startswith("error") or str(capture.description or "").lower() == "processing failed"
-                capture.llm_status = "error" if has_error else "done"
-
-            # 4. Update video status
-            result = await session.execute(
-                select(BrdVideo).where(BrdVideo.id == video_id)
-            )
-            video = result.scalar_one_or_none()
-            if video:
-                video.status = "ready"
-
-            await session.commit()
-            logger.info(
-                "Video %s processed %s captures end-to-end in %.2fs",
-                video_id,
-                len(capture_records),
-                time.perf_counter() - t0,
-            )
+                logger.info(
+                    "Video %s cropped/queued %s captures in %.2fs",
+                    video_id,
+                    inserted,
+                    time.perf_counter() - t0,
+                )
 
         except Exception as e:
             logger.error(f"Video processing failed for {video_id}: {e}")

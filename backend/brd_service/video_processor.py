@@ -381,17 +381,16 @@ def _crop_teams_sidebar_if_present(image_path: str) -> Optional[Dict]:
     return {"x": 0, "y": 0, "width": crop_x, "height": h, "auto_crop": "teams_sidebar"}
 
 
-async def postprocess_frames(frames: List[Dict]) -> List[Dict]:
+def postprocess_frames_iter(frames: List[Dict]):
     """
-    Postprocess extracted frames:
+    Streaming postprocess:
     - drop Teams gallery-only frames
     - auto-crop Teams sidebar
-    - enforce timestamp ordering
+    Yields frames one-by-one (after crop/filter) so the caller can persist UI state early.
     """
-    processed: List[Dict] = []
     dropped = 0
-    gallery_dropped_candidates: List[Dict] = []
 
+    # Caller can pre-sort to ensure canonical timestamp ordering.
     for frame in frames:
         path = frame.get("path")
         if not path or not os.path.exists(path):
@@ -399,7 +398,6 @@ async def postprocess_frames(frames: List[Dict]) -> List[Dict]:
 
         if _detect_teams_gallery_only(path):
             dropped += 1
-            gallery_dropped_candidates.append(frame)
             continue
 
         crop_meta = _crop_teams_sidebar_if_present(path)
@@ -407,8 +405,21 @@ async def postprocess_frames(frames: List[Dict]) -> List[Dict]:
             frame["auto_crop"] = crop_meta
             frame["teams_sidebar_cropped"] = True
 
-        processed.append(frame)
+        yield frame
+
+    logger.info("Frame postprocess iter: dropped_gallery=%s", dropped)
+
+
+async def postprocess_frames(frames: List[Dict]) -> List[Dict]:
+    """
+    Backwards-compatible postprocess that returns a full list.
+    Prefer `postprocess_frames_iter` when you want "live" incremental persistence.
+    """
+    processed: List[Dict] = []
+    async_frames: List[Dict] = list(frames)
+    for f in postprocess_frames_iter(async_frames):
+        processed.append(f)
 
     processed.sort(key=lambda x: (float(x.get("timestamp", 0.0)), x.get("filename", "")))
-    logger.info("Frame postprocess: kept=%s dropped_gallery=%s", len(processed), dropped)
+    logger.info("Frame postprocess: kept=%s dropped_gallery=?", len(processed))
     return processed

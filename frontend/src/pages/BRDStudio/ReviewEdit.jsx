@@ -47,7 +47,18 @@ import CropIcon from "@mui/icons-material/Crop";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import ImageEditor from "./ImageEditor";
 
-function SortableFrame({ cap, idx, onCrop, onEdit, onDelete, onToggleKeep, onPreview, apiBase }) {
+function SortableFrame({
+  cap,
+  idx,
+  onCrop,
+  onEdit,
+  onDelete,
+  onToggleKeep,
+  onPreview,
+  apiBase,
+  onGenerateDescription,
+  isDescribing,
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: cap.id,
   });
@@ -137,12 +148,53 @@ function SortableFrame({ cap, idx, onCrop, onEdit, onDelete, onToggleKeep, onPre
             {cap.label || `Frame ${idx + 1}`}
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
-             <Typography variant="caption" sx={{ color: "#4caf50", fontWeight: 700, fontSize: '10px' }}>
-               ✓ Described
-             </Typography>
-             <IconButton size="small" onClick={() => onEdit(cap)} sx={{ ml: "auto", color: "#8fa3c0", p: 0.3 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color:
+                  cap.llm_status === "done"
+                    ? "#4caf50"
+                    : cap.llm_status === "processing"
+                      ? "#F26522"
+                      : cap.llm_status === "pending"
+                        ? "#64748b"
+                        : "#ef4444",
+                fontWeight: 800,
+                fontSize: "10px",
+              }}
+            >
+              {cap.llm_status === "done"
+                ? "✓ Described"
+                : cap.llm_status === "processing"
+                  ? "Describing..."
+                  : cap.llm_status === "pending"
+                    ? "AI pending"
+                    : cap.llm_status || "AI pending"}
+            </Typography>
+
+            <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 0.6 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => onGenerateDescription?.(cap.id)}
+                disabled={!cap.image_url || isDescribing || cap.llm_status === "processing"}
+                sx={{
+                  px: 0.9,
+                  py: 0.2,
+                  borderColor: "rgba(242,101,34,0.6)",
+                  color: "#F26522",
+                  fontSize: "10px",
+                  fontWeight: 800,
+                  textTransform: "none",
+                }}
+              >
+                {isDescribing || cap.llm_status === "processing" ? <CircularProgress size={12} /> : "Generate"}
+              </Button>
+
+              <IconButton size="small" onClick={() => onEdit(cap)} sx={{ color: "#8fa3c0", p: 0.3 }} disabled={!cap.image_url}>
                 <EditIcon sx={{ fontSize: 14 }} />
-             </IconButton>
+              </IconButton>
+            </Box>
           </Box>
           
           <Typography 
@@ -158,7 +210,11 @@ function SortableFrame({ cap, idx, onCrop, onEdit, onDelete, onToggleKeep, onPre
               mb: 1
             }}
           >
-            {cap.description || "No description. Click edit to add."}
+            {cap.description
+              ? cap.description
+              : cap.llm_status === "pending"
+                ? "No AI description yet. Click Generate for this image."
+                : "No description. Click Edit to add."}
           </Typography>
 
           <Divider sx={{ my: 1, opacity: 0.4 }} />
@@ -225,9 +281,15 @@ export default function ReviewEdit({
   const [captureError, setCaptureError] = useState("");
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
+  const capturesRef = useRef(captures);
+  const [describingCaptureIds, setDescribingCaptureIds] = useState({});
 
   const authHeaders = { Authorization: `Bearer ${token}` };
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  useEffect(() => {
+    capturesRef.current = captures;
+  }, [captures]);
 
   // Ordered IDs for sortable
   const captureIds = useMemo(() => captures.map((c) => c.id), [captures]);
@@ -314,7 +376,49 @@ export default function ReviewEdit({
     }
   };
 
+  const refreshAndWaitForCapture = async (capId, attempts = 30, intervalMs = 2000) => {
+    for (let i = 0; i < attempts; i += 1) {
+      await refreshCaptures();
+      await new Promise((r) => setTimeout(r, intervalMs));
+      const current = capturesRef.current.find((c) => c.id === capId);
+      if (current && (current.llm_status === "done" || current.llm_status === "error")) return;
+    }
+  };
+
+  const generateDescriptionForCapture = async (capId) => {
+    if (!capId || !projectId) return;
+    const currently = capturesRef.current.find((c) => c.id === capId);
+    if (!currently || !currently.image_url) return;
+    if (currently.llm_status === "processing") return;
+
+    if (describingCaptureIds[capId]) return;
+    setDescribingCaptureIds((prev) => ({ ...prev, [capId]: true }));
+
+    try {
+      const res = await fetch(`${apiBase}/api/brd/captures/${capId}/describe`, {
+        method: "POST",
+        headers: authHeaders,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to start description");
+      }
+
+      // Live polling until this capture is done/error.
+      await refreshAndWaitForCapture(capId);
+    } catch (err) {
+      console.error("Generate description failed:", err);
+    } finally {
+      setDescribingCaptureIds((prev) => {
+        const next = { ...prev };
+        delete next[capId];
+        return next;
+      });
+    }
+  };
+
   const keptCount = captures.filter((c) => c.is_kept).length;
+  const keptMissingDescCount = captures.filter((c) => c.is_kept && c.llm_status !== "done").length;
 
   useEffect(() => {
     return () => {
@@ -445,7 +549,12 @@ export default function ReviewEdit({
           variant="contained"
           endIcon={<NavigateNextIcon />}
           onClick={onNext}
-          disabled={keptCount === 0}
+          disabled={keptCount === 0 || keptMissingDescCount > 0}
+          title={
+            keptMissingDescCount > 0
+              ? `Generate AI descriptions for ${keptMissingDescCount} kept frame(s) first.`
+              : undefined
+          }
           size="small"
           sx={{ background: "linear-gradient(135deg, #F26522 0%, #e55a1b 100%)", fontWeight: 600 }}
         >
@@ -469,6 +578,8 @@ export default function ReviewEdit({
                   onDelete={handleDeleteCapture}
                   onCrop={(c) => setImageEditorCap(c)}
                   onPreview={setPreviewImage}
+                  onGenerateDescription={generateDescriptionForCapture}
+                  isDescribing={!!describingCaptureIds[cap.id]}
                 />
               ))}
             </Grid>
@@ -605,7 +716,7 @@ export default function ReviewEdit({
         <DialogTitle>Add Captured Frame?</DialogTitle>
         <DialogContent>
           <Typography sx={{ mb: 1.5 }}>
-            Timestamp: <strong>{Math.round(captureAtTime)}s</strong>. This frame will be auto-processed, sorted by timestamp, and AI-described.
+            Timestamp: <strong>{Math.round(captureAtTime)}s</strong>. This frame will be added (cropped/sanitized). AI description will be generated only when you click <strong>Generate</strong> on the image.
           </Typography>
           {capturedFramePreview && (
             <img src={capturedFramePreview} alt="Captured preview" style={{ width: "100%", borderRadius: 8 }} />
