@@ -7,7 +7,7 @@
  * - Markdown rendering for tables and lists (matches DOCX export parity).
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm"; // For tables
 import {
@@ -37,7 +37,6 @@ import HistoryIcon from "@mui/icons-material/History";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
 // Section mapping to match template numbering exactly
 const SECTION_CONFIG = [
@@ -284,10 +283,6 @@ export default function DocumentEditor({
     process_name: projectData?.process_name || projectData?.name || "",
   });
   const [regenAdvice, setRegenAdvice] = useState(null);
-  const [editorSession, setEditorSession] = useState(null);
-  const [editorDialogOpen, setEditorDialogOpen] = useState(false);
-  const [latestEditorDoc, setLatestEditorDoc] = useState(null);
-  const [enterpriseLoading, setEnterpriseLoading] = useState(false);
 
   useEffect(() => {
     if (projectData) {
@@ -391,66 +386,6 @@ export default function DocumentEditor({
     setVersionDialog(null);
   };
 
-  const openEnterpriseEditor = async () => {
-    try {
-      setEnterpriseLoading(true);
-      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/editor/session`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setEditorSession(data);
-      if (data.enabled && data.editor_url) {
-        setEditorDialogOpen(true);
-      }
-    } catch (e) {
-      console.error("Failed to open enterprise editor session", e);
-    } finally {
-      setEnterpriseLoading(false);
-    }
-  };
-
-  const ensureEnterpriseSession = useCallback(async () => {
-    if (!projectId || !token) return;
-    try {
-      setEnterpriseLoading(true);
-      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/editor/session`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setEditorSession(data);
-    } catch (e) {
-      console.error("Failed to initialize enterprise editor session", e);
-    } finally {
-      setEnterpriseLoading(false);
-    }
-  }, [projectId, token, apiBase]);
-
-  const loadLatestEditorDoc = useCallback(async () => {
-    if (!projectId) return;
-    try {
-      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/editor/latest`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setLatestEditorDoc(data?.found ? data : null);
-    } catch (e) {
-      console.error("Failed to load latest enterprise editor document", e);
-    }
-  }, [projectId, apiBase, token]);
-
-  useEffect(() => {
-    loadLatestEditorDoc();
-  }, [loadLatestEditorDoc]);
-
-  useEffect(() => {
-    ensureEnterpriseSession();
-  }, [ensureEnterpriseSession]);
-
   const sortedSections = useMemo(() => {
     return [...sections].sort((a, b) => {
       const aIdx = SECTION_ORDER.indexOf(a.section_key);
@@ -468,22 +403,6 @@ export default function DocumentEditor({
         {sections.length > 0 ? (
           <>
             <Button variant="outlined" size="small" onClick={() => handleGenerate(true)} disabled={generating} startIcon={<RefreshIcon />} sx={{ borderColor: "rgba(242,101,34,0.5)", color: "#F26522" }}>Regenerate All</Button>
-            <Button variant="outlined" size="small" onClick={openEnterpriseEditor} startIcon={<OpenInNewIcon />} sx={{ borderColor: "rgba(31,56,100,0.5)", color: "#1F3864", bgcolor: "#fff" }}>
-              Open Enterprise Editor
-            </Button>
-            {latestEditorDoc?.download_url && (
-              <Button
-                variant="outlined"
-                size="small"
-                component="a"
-                href={`${apiBase}${latestEditorDoc.download_url}`}
-                target="_blank"
-                rel="noreferrer"
-                sx={{ borderColor: "rgba(31,56,100,0.28)", color: "#1F3864", bgcolor: "#fff" }}
-              >
-                Open Latest Edited DOCX
-              </Button>
-            )}
             <Button variant="contained" size="small" onClick={onNext} endIcon={<FileDownloadIcon />} sx={{ background: "#F26522", fontWeight: 700 }}>Download Doc</Button>
           </>
         ) : (
@@ -510,37 +429,28 @@ export default function DocumentEditor({
         </Alert>
       )}
 
-      {/* Viewport: Enterprise editor first-class */}
-      <Box sx={{ flex: 1, display: "flex", bgcolor: "#0A1628" }}>
-        {enterpriseLoading ? (
-          <Box sx={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 1.5, color: "#8fa3c0" }}>
-            <CircularProgress size={18} />
-            <Typography variant="body2">Loading final BRD editor...</Typography>
+      {/* Form-style editor: edit sections directly (no DOCX viewer iframe). */}
+      <Box sx={{ flex: 1, overflowY: "auto", bgcolor: "#0A1628", p: 3 }}>
+        {sortedSections.length === 0 ? (
+          <Box sx={{ p: 2 }}>
+            <Alert severity="info">No sections generated yet. Click “Draft BRD” or regenerate to start editing.</Alert>
           </Box>
-        ) : editorSession?.enabled && editorSession?.editor_url ? (
-          <iframe
-            src={editorSession.editor_url}
-            title="Enterprise DOCX Editor"
-            style={{ width: "100%", height: "100%", border: "none" }}
-          />
         ) : (
-          <Box sx={{ flex: 1, p: 3 }}>
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              Enterprise editor is not enabled in backend configuration. Step 3 requires enterprise editor mode.
-            </Alert>
-            {editorSession?.download_url && (
-              <Button
-                component="a"
-                href={`${apiBase}${editorSession.download_url}`}
-                target="_blank"
-                rel="noreferrer"
-                variant="contained"
-                sx={{ background: "#F26522", fontWeight: 700 }}
-              >
-                Open Latest Mapped DOCX
-              </Button>
-            )}
-          </Box>
+          sortedSections.map((sec, idx) => (
+            <SectionBlock
+              key={sec.id}
+              section={sec}
+              index={idx}
+              apiBase={apiBase}
+              token={token}
+              captures={captures}
+              onRefine={(section) => {
+                setRefineDialog(section);
+                setRefineInstruction("");
+              }}
+              onHistory={openVersionHistory}
+            />
+          ))
         )}
       </Box>
 
@@ -563,39 +473,6 @@ export default function DocumentEditor({
         <DialogActions sx={{ p: 2 }}><Button onClick={() => setRefineDialog(null)} sx={{ color: "#8fa3c0" }}>Cancel</Button><Button variant="contained" onClick={handleRefine} disabled={generating} sx={{ bgcolor: "#F26522" }}>Refine Content</Button></DialogActions>
       </Dialog>
 
-      <Dialog open={editorDialogOpen} onClose={() => setEditorDialogOpen(false)} maxWidth="xl" fullWidth>
-        <DialogTitle>Enterprise DOCX Editor</DialogTitle>
-        <DialogContent sx={{ p: 0 }}>
-          {editorSession?.enabled && editorSession?.editor_url ? (
-            <iframe
-              src={editorSession.editor_url}
-              title="Enterprise DOCX Editor"
-              style={{ width: "100%", height: "78vh", border: "none" }}
-            />
-          ) : (
-            <Box sx={{ p: 3 }}>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Enterprise editor is not enabled on server configuration yet.
-              </Alert>
-              {editorSession?.download_url && (
-                <Button
-                  component="a"
-                  href={`${apiBase}${editorSession.download_url}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="contained"
-                >
-                  Open Latest DOCX
-                </Button>
-              )}
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={loadLatestEditorDoc}>Check Latest Saved Copy</Button>
-          <Button onClick={() => setEditorDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

@@ -38,6 +38,7 @@ import HourglassTopIcon from "@mui/icons-material/HourglassTop";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import StopCircleIcon from "@mui/icons-material/StopCircle";
 
 export default function UploadCapture({
   projectId,
@@ -47,6 +48,7 @@ export default function UploadCapture({
   onNext,
   token,
   apiBase,
+  onBusyChange,
 }) {
   const [ingestionMode, setIngestionMode] = useState("video_transcript");
   const [videoFile, setVideoFile] = useState(null);
@@ -54,6 +56,8 @@ export default function UploadCapture({
   const [transcriptText, setTranscriptText] = useState("");
   const [uploading, setUploading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("");
+  const [captureProcessing, setCaptureProcessing] = useState(false);
+  const [canceling, setCanceling] = useState(false);
   const videoInputRef = useRef(null);
   const transcriptInputRef = useRef(null);
   const pollRef = useRef(null);
@@ -103,13 +107,45 @@ export default function UploadCapture({
   // Check if all captures are done
   const allCapturesDone = captures.length > 0 && captures.every((c) => c.llm_status !== "processing" && c.llm_status !== "pending");
 
+  const capturesInProgress = captures.some((c) => c.llm_status === "processing" || c.llm_status === "pending");
+  const uiBusy = uploading || captureProcessing || capturesInProgress;
+
   // Stop polling when all captures are done (in useEffect, not during render)
   useEffect(() => {
     if (allCapturesDone && pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
+      setCaptureProcessing(false);
+      setProcessingStatus("Frame capture + analysis complete.");
     }
   }, [allCapturesDone]);
+
+  // Let the parent block step navigation while processing is active.
+  useEffect(() => {
+    if (onBusyChange) onBusyChange(uiBusy || canceling);
+  }, [uiBusy, canceling, onBusyChange]);
+
+  // Update overlay messaging while the backend is extracting frames + describing them.
+  useEffect(() => {
+    if (!captureProcessing || canceling) return;
+    if (String(processingStatus || "").startsWith("Error:")) return;
+    if (captures.length === 0) {
+      setProcessingStatus("Extracting frames...");
+      return;
+    }
+    if (capturesInProgress) {
+      setProcessingStatus("Analyzing frames with AI...");
+      return;
+    }
+  }, [captureProcessing, canceling, captures.length, capturesInProgress]);
+
+  // During processing, block modal interactions by closing dialogs immediately.
+  useEffect(() => {
+    if (uiBusy || canceling) {
+      setPreviewImage(null);
+      setVideoPreviewOpen(false);
+    }
+  }, [uiBusy, canceling]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -159,7 +195,7 @@ export default function UploadCapture({
       return;
     }
     // video_transcript or video_only
-    handleUpload(currentId);
+    await handleUpload(currentId);
   };
 
   // Modified handleUpload to take ID directly
@@ -168,6 +204,8 @@ export default function UploadCapture({
     if (!pid) return;
     if ((ingestionMode === "video_transcript" || ingestionMode === "video_only") && !videoFile) return;
 
+    setCanceling(false);
+    setCaptureProcessing(false);
     setUploading(true);
     setProcessingStatus("Uploading files...");
 
@@ -186,7 +224,8 @@ export default function UploadCapture({
       });
 
       if (res.ok) {
-        setProcessingStatus("Upload complete. Generating descriptions...");
+        setProcessingStatus("Upload complete. Extracting frames...");
+        setCaptureProcessing(true);
         setVideoFile(null);
         setTranscriptFile(null);
         setTranscriptText("");
@@ -195,9 +234,11 @@ export default function UploadCapture({
       } else {
         const err = await res.json();
         setProcessingStatus(`Error: ${err.detail || "Upload failed"}`);
+        setCaptureProcessing(false);
       }
     } catch (err) {
       setProcessingStatus(`Error: ${err.message}`);
+      setCaptureProcessing(false);
     } finally {
       setUploading(false);
     }
@@ -299,8 +340,53 @@ export default function UploadCapture({
     }
   };
 
+  const stopAndRevert = async () => {
+    if (!projectId || canceling) return;
+    setCanceling(true);
+    setCaptureProcessing(false);
+    setUploading(false);
+    setProcessingStatus("Stopping and reverting changes...");
+
+    // Prevent further polling from updating UI during revert.
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (pollStopTimeoutRef.current) clearTimeout(pollStopTimeoutRef.current);
+    pollRef.current = null;
+    pollStopTimeoutRef.current = null;
+
+    try {
+      await fetch(`${apiBase}/api/brd/projects/${projectId}/cancel`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      console.error("Cancel failed", e);
+    }
+
+    try {
+      await fetch(`${apiBase}/api/brd/projects/${projectId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (e) {
+      console.error("Project delete failed", e);
+    }
+
+    // Reset local UI immediately; BRDStudio also clears captures/sections when projectId becomes null.
+    setPreviewImage(null);
+    setVideoPreviewOpen(false);
+    setVideoFile(null);
+    setTranscriptFile(null);
+    setTranscriptText("");
+    setSupportingFile(null);
+    setAssetList({ videos: [], documents: [] });
+    setAssetBusyId("");
+    setProjectId(null);
+    setProcessingStatus("");
+    setCanceling(false);
+  };
+
   return (
-    <Box sx={{ height: "100%", display: "flex", overflow: "hidden" }}>
+    <Box sx={{ height: "100%", display: "flex", overflow: "hidden", position: "relative" }}>
       {/* Left: Setup & Upload */}
       <Box
         sx={{
@@ -435,7 +521,7 @@ export default function UploadCapture({
             <Button
               variant="contained"
               fullWidth
-              disabled={!supportingFile}
+              disabled={!supportingFile || uiBusy || canceling}
               onClick={uploadSupportingFile}
               sx={{ background: "#1F3864", fontWeight: 700 }}
             >
@@ -448,6 +534,8 @@ export default function UploadCapture({
           variant="contained"
           onClick={createAndUpload}
           disabled={
+            uiBusy ||
+            canceling ||
             uploading ||
             (!projectId && !projectName.trim()) ||
             ((ingestionMode === "video_transcript" || ingestionMode === "video_only") && !videoFile) ||
@@ -578,7 +666,12 @@ export default function UploadCapture({
                 Captured Frames ({captures.length})
               </Typography>
               <Tooltip title="Refresh captures">
-                <IconButton onClick={refreshCaptures} size="small" sx={{ color: "#8fa3c0" }}>
+                <IconButton
+                  onClick={refreshCaptures}
+                  size="small"
+                  sx={{ color: "#8fa3c0" }}
+                  disabled={uiBusy || canceling}
+                >
                   <RefreshIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -663,6 +756,7 @@ export default function UploadCapture({
                   variant="contained"
                   endIcon={!allCapturesDone ? <CircularProgress size={16} /> : <NavigateNextIcon />}
                   onClick={onNext}
+                  disabled={uiBusy || canceling}
                   sx={{
                     px: 6,
                     py: 1.5,
@@ -679,6 +773,49 @@ export default function UploadCapture({
           </>
         )}
       </Box>
+
+      {/* Blocking overlay (single Stop & Revert) */}
+      {uiBusy || canceling ? (
+        <Box
+          sx={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 2000,
+            bgcolor: "rgba(0,0,0,0.55)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            p: 3,
+            textAlign: "center",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <StopCircleIcon sx={{ color: "#ef5350" }} />
+            <Typography sx={{ color: "#fff", fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 18 }}>
+              Processing in progress
+            </Typography>
+          </Box>
+          <Typography sx={{ color: "#8fa3c0", fontSize: 13, maxWidth: 520, lineHeight: 1.6 }}>
+            {processingStatus || (captureProcessing ? "Extracting frames..." : "Analyzing...")}
+          </Typography>
+          {uiBusy && !canceling ? (
+            <Button
+              variant="contained"
+              color="error"
+              onClick={stopAndRevert}
+              sx={{ px: 4, py: 1.4, borderRadius: 2, fontWeight: 900 }}
+            >
+              Stop & Revert
+            </Button>
+          ) : (
+            <Typography sx={{ color: "#8fa3c0", fontSize: 12 }}>
+              Reverting...
+            </Typography>
+          )}
+        </Box>
+      ) : null}
 
       {/* Lightbox Preview */}
       <Dialog

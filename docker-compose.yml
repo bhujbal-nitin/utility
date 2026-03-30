@@ -108,30 +108,12 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - ALGORITHM=HS256
       - VERTEX_KEY_PATH=/app/vertex-key.json
-      - DOCX_EDITOR_ENABLED=${DOCX_EDITOR_ENABLED:-true}
-      - DOCX_EDITOR_URL=${DOCX_EDITOR_URL:-http://localhost:8082/web-apps/apps/documenteditor/main/index.html}
-      - DOCX_EDITOR_PUBLIC_BASE_URL=${DOCX_EDITOR_PUBLIC_BASE_URL:-http://localhost:8001}
-      - DOCX_EDITOR_JWT_SECRET=${DOCX_EDITOR_JWT_SECRET:-change_me_docx_secret}
+      # DOCX editor is intentionally disabled (we removed the DOC viewer).
+      - DOCX_EDITOR_ENABLED=false
     volumes:
       - ./backend/vertex-key.json:/app/vertex-key.json
     ports:
       - "8001:8001"
-    networks:
-      - edge_network
-
-  # Enterprise DOCX Editor (OnlyOffice Document Server)
-  docs-editor:
-    image: onlyoffice/documentserver:latest
-    container_name: docs_editor
-    restart: always
-    environment:
-      - JWT_ENABLED=true
-      - JWT_SECRET=${DOCX_EDITOR_JWT_SECRET:-change_me_docx_secret}
-    ports:
-      - "8082:80"
-    volumes:
-      - docs_data:/var/www/onlyoffice/Data
-      - docs_log:/var/log/onlyoffice
     networks:
       - edge_network
 
@@ -164,7 +146,6 @@ services:
     container_name: edge_frontend
     depends_on:
       - auth-service
-      - docs-editor
     ports:
       - "3000:80"
     networks:
@@ -176,5 +157,3 @@ networks:
 
 volumes:
   postgres_data:
-  docs_data:
-  docs_log:

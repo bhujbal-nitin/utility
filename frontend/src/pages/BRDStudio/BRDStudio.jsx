@@ -84,6 +84,7 @@ export default function BRDStudio({ onBack }) {
   const [captures, setCaptures] = useState([]);
   const [sections, setSections] = useState([]);
   const [error, setError] = useState(null);
+  const [step1Busy, setStep1Busy] = useState(false);
 
   // Fetch project data when projectId or token changes
   const fetchProject = useCallback(async () => {
@@ -109,6 +110,15 @@ export default function BRDStudio({ onBack }) {
   useEffect(() => {
     fetchProject();
   }, [fetchProject]);
+
+  // When project is reset (e.g., Stop & Revert), clear local state so UI never shows stale data.
+  useEffect(() => {
+    if (!projectId) {
+      setProjectData(null);
+      setCaptures([]);
+      setSections([]);
+    }
+  }, [projectId]);
 
   // Refresh captures
   const refreshCaptures = useCallback(async () => {
@@ -186,6 +196,7 @@ export default function BRDStudio({ onBack }) {
                   <AEStepIcon {...props} stepIcon={step.icon} />
                 )}
                 onClick={() => {
+                  if (step1Busy) return; // block navigation during Step 1 processing
                   // Allow going back to Step 1 anytime for iterative updates
                   if (idx <= activeStep || (idx === 0 && projectId)) {
                     setActiveStep(idx);
@@ -218,12 +229,17 @@ export default function BRDStudio({ onBack }) {
       {/* Main content area: Project sidebar + Step content */}
       <Box sx={{ flex: 1, display: "flex", overflow: "hidden" }}>
         {/* Multi-project sidebar */}
-        <ProjectListPanel
-          activeProjectId={projectId}
-          onSelectProject={handleSelectProject}
-          token={token}
-          apiBase={API_BASE}
-        />
+        <Box sx={{ pointerEvents: step1Busy ? "none" : "auto", opacity: step1Busy ? 0.6 : 1 }}>
+          <ProjectListPanel
+            activeProjectId={projectId}
+            onSelectProject={(pid) => {
+              if (step1Busy) return;
+              handleSelectProject(pid);
+            }}
+            token={token}
+            apiBase={API_BASE}
+          />
+        </Box>
 
         {/* Step Content */}
         <Box sx={{ flex: 1, overflow: "hidden" }}>
@@ -236,6 +252,7 @@ export default function BRDStudio({ onBack }) {
               onNext={handleNext}
               token={token}
               apiBase={API_BASE}
+              onBusyChange={setStep1Busy}
             />
           )}
           {activeStep === 1 && (
