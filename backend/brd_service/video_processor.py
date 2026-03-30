@@ -281,8 +281,44 @@ def _detect_teams_gallery_only(image_path: str) -> bool:
         return False
 
     mean_std = float(np.std(cell_means))
-    # Conservative gallery detector: avoid dropping valid business frames.
-    return (edge_density < 0.08 and mean_std < 22.0)
+
+    # Improved gallery detection:
+    # - Full participant gallery is a tiled grid that is repetitive across BOTH
+    #   the main content area and the right-side panel.
+    # - Shared-screen (screen share + Teams sidebar) typically has very different
+    #   visual characteristics between left/main vs right panel.
+    #
+    # We enforce "repetitive tiles across both sides" by checking:
+    # - grid uniformity (mean_std)
+    # - edge density in left and right bands
+    # - brightness similarity between left and right bands
+
+    split_x = int(w * 0.82)  # matches the sidebar crop boundary
+    left = gray[:, :split_x] if split_x > 0 else gray
+    right = gray[:, split_x:] if split_x < w else gray
+
+    # Edge density per side.
+    # (We reuse edges computed from the full frame for speed; approximate by recomputing per band.)
+    edges_left = cv2.Canny(left, 50, 150)
+    edges_right = cv2.Canny(right, 50, 150)
+    left_edge_density = float(np.count_nonzero(edges_left)) / float(edges_left.size) if edges_left.size else 0.0
+    right_edge_density = float(np.count_nonzero(edges_right)) / float(edges_right.size) if edges_right.size else 0.0
+
+    left_mean = float(left.mean()) if left.size else 0.0
+    right_mean = float(right.mean()) if right.size else 0.0
+    brightness_delta = abs(left_mean - right_mean)
+
+    # Strict thresholds for gallery-only. Conservative to avoid false positives.
+    mean_std_ceiling = 18.0
+    side_edge_density_floor = 0.06
+    brightness_delta_ceiling = 18.0
+
+    return (
+        (mean_std <= mean_std_ceiling)
+        and (left_edge_density >= side_edge_density_floor)
+        and (right_edge_density >= side_edge_density_floor)
+        and (brightness_delta <= brightness_delta_ceiling)
+    )
 
 
 def _crop_teams_sidebar_if_present(image_path: str) -> Optional[Dict]:
@@ -298,47 +334,51 @@ def _crop_teams_sidebar_if_present(image_path: str) -> Optional[Dict]:
 
     img = cv2.imread(image_path)
     if img is None:
-        return None
+        # OpenCV can't decode some FFmpeg/extracted JPEGs (non-standard headers).
+        # Fall back to PIL so we still crop before OCR/LLM.
+        try:
+            from PIL import Image as PILImage  # type: ignore
+
+            pil_img = PILImage.open(image_path)
+            # Convert to RGB for safe JPEG saves / OCR consistency.
+            if pil_img.mode in ("RGBA", "P", "LA"):
+                pil_img = pil_img.convert("RGB")
+            w, h = pil_img.size
+            if w < 900:
+                return None
+
+            crop_x = int(w * 0.82)
+            if crop_x <= 0 or crop_x >= w:
+                return None
+
+            cropped = pil_img.crop((0, 0, crop_x, h))
+            ext = os.path.splitext(image_path)[1].lower()
+            if ext in (".jpg", ".jpeg"):
+                cropped.save(image_path, format="JPEG", quality=97)
+            else:
+                cropped.save(image_path)
+            return {"x": 0, "y": 0, "width": crop_x, "height": h, "auto_crop": "teams_sidebar"}
+        except Exception:
+            return None
 
     h, w = img.shape[:2]
     # Only consider widescreen captures.
     if w < 900:
         return None
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    split_x = int(w * 0.78)
-    right_strip = gray[:, split_x:]
-    if right_strip.size == 0:
+    # Requirement: for all Teams screen-share frames (non-gallery),
+    # we must ALWAYS remove the sidebar segment before OCR/LLM description.
+    crop_x = int(w * 0.82)
+    if crop_x <= 0 or crop_x >= w:
         return None
-    main_strip = gray[:, :split_x] if split_x > 0 else gray
 
-    # Sidebar tends to have lower visual entropy and strong vertical separators.
-    entropy_like = float(np.std(right_strip))
-    sobel = cv2.Sobel(right_strip, cv2.CV_64F, 1, 0, ksize=3)
-    vertical_energy = float(np.mean(np.abs(sobel)))
-    right_mean = float(np.mean(right_strip))
-    main_mean = float(np.mean(main_strip)) if main_strip.size else right_mean
-    brightness_delta = abs(main_mean - right_mean)
-    # Boundary contrast around likely panel split.
-    boundary_band = gray[:, max(1, split_x - 2): min(w - 1, split_x + 2)]
-    boundary_grad = float(np.mean(np.abs(np.diff(boundary_band.astype(np.float32), axis=1)))) if boundary_band.size else 0.0
+    cropped = img[:, :crop_x]
+    if cropped.size == 0:
+        return None
 
-    # Trigger on classic separator signature OR strong side-panel contrast profile.
-    should_crop = (
-        (entropy_like < 34.0 and vertical_energy > 9.5)
-        or (entropy_like < 45.0 and brightness_delta > 14.0)
-        or (boundary_grad > 14.0 and entropy_like < 52.0)
-    )
-    if should_crop:
-        # Crop right panel; keep most business area.
-        crop_x = int(w * 0.82)
-        cropped = img[:, :crop_x]
-        if cropped.size == 0:
-            return None
-        cv2.imwrite(image_path, cropped, [int(cv2.IMWRITE_JPEG_QUALITY), 97])
-        return {"x": 0, "y": 0, "width": crop_x, "height": h, "auto_crop": "teams_sidebar"}
-
-    return None
+    # Overwrite image in place so downstream OCR/vision sees the cropped result.
+    cv2.imwrite(image_path, cropped, [int(cv2.IMWRITE_JPEG_QUALITY), 97])
+    return {"x": 0, "y": 0, "width": crop_x, "height": h, "auto_crop": "teams_sidebar"}
 
 
 async def postprocess_frames(frames: List[Dict]) -> List[Dict]:
@@ -368,16 +408,6 @@ async def postprocess_frames(frames: List[Dict]) -> List[Dict]:
             frame["teams_sidebar_cropped"] = True
 
         processed.append(frame)
-
-    # Safety guard: if detector was too aggressive, retain a subset of dropped frames
-    # so capture count remains close to source density.
-    min_keep_target = max(12, int(len(frames) * 0.72))
-    if len(processed) < min_keep_target and gallery_dropped_candidates:
-        need = min_keep_target - len(processed)
-        # Re-add earliest dropped frames to preserve sequence continuity.
-        gallery_dropped_candidates.sort(key=lambda x: (float(x.get("timestamp", 0.0)), x.get("filename", "")))
-        processed.extend(gallery_dropped_candidates[:need])
-        dropped = max(0, dropped - need)
 
     processed.sort(key=lambda x: (float(x.get("timestamp", 0.0)), x.get("filename", "")))
     logger.info("Frame postprocess: kept=%s dropped_gallery=%s", len(processed), dropped)
