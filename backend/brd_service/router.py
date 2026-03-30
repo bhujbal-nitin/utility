@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, B
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
+from sqlalchemy import update
 from pydantic import BaseModel
 from jose import jwt
 
@@ -210,6 +211,26 @@ async def delete_project(
     ]:
         shutil.rmtree(d, ignore_errors=True)
     return {"deleted": True}
+
+
+@router.post("/projects/{project_id}/cancel")
+async def cancel_project_processing(
+    project_id: str,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Cancel in-progress capture + description jobs for a project.
+    Background tasks periodically check `project.status == "cancelled"` and bail out early.
+    """
+    project = await _get_project_or_404(db, project_id, user.id)
+    project.status = "cancelled"
+
+    # Mark related assets as cancelled/error so the UI stops showing them as active.
+    await db.execute(update(BrdVideo).where(BrdVideo.project_id == project_id).values(status="cancelled"))
+    await db.execute(update(BrdCapture).where(BrdCapture.project_id == project_id).values(llm_status="cancelled"))
+    await db.commit()
+    return {"cancelled": True}
 
 
 # ─── Videos ───────────────────────────────────────────────────────────────────
@@ -1528,6 +1549,17 @@ async def _process_video_captures(
 
     async with AsyncSessionLocal() as session:
         try:
+            async def _is_cancelled() -> bool:
+                prj_status = await session.execute(
+                    select(BrdProject.status).where(BrdProject.id == project_id)
+                )
+                status = prj_status.scalar_one_or_none()
+                # Treat missing project as cancelled so background tasks stop after the UI deletes the project.
+                return status is None or status == "cancelled"
+
+            if await _is_cancelled():
+                return
+
             t0 = time.perf_counter()
             # 1. Smart capture (scene detect → fallback)
             # Save directly under project_id for flat serving structure
@@ -1542,6 +1574,9 @@ async def _process_video_captures(
                     min_interval_sec=float(settings.BRD_MIN_CAPTURE_INTERVAL_SEC or 1.5),
                     max_frames=int(settings.BRD_MAX_CAPTURE_FRAMES or 36),
                 )
+                if await _is_cancelled():
+                    return
+
                 frames = sorted(frames, key=lambda f: (float(f.get("timestamp", 0.0)), f.get("filename", "")))
                 logger.info("Video %s capture extraction complete: %s frames in %.2fs", video_id, len(frames), time.perf_counter() - t0)
 
@@ -1553,6 +1588,9 @@ async def _process_video_captures(
                 # 2. Rename and create capture records
                 capture_records = []
                 for frame in frames:
+                    if await _is_cancelled():
+                        return
+
                     # Prefix with video_id to ensure uniqueness in the project's flat folder
                     new_filename = f"{video_id}_{frame['filename']}"
                     new_path = os.path.join(frames_dir, new_filename)
@@ -1593,6 +1631,9 @@ async def _process_video_captures(
             await session.commit()
 
             # 3. Async LLM descriptions in batch with concurrency control.
+            if await _is_cancelled():
+                return
+
             frame_jobs = []
             transcript_context_by_frame: dict[str, list[dict]] = {}
             for capture in capture_records:
@@ -1604,6 +1645,9 @@ async def _process_video_captures(
                 frame_jobs,
                 transcript_context_by_frame=transcript_context_by_frame,
             )
+            if await _is_cancelled():
+                return
+
             for capture, desc in zip(capture_records, desc_results):
                 capture.ocr_text = desc.get("ocr_text", "")
                 capture.description = desc.get("description", "")
@@ -1647,11 +1691,22 @@ async def _describe_single_capture(capture_id: str, image_path: str, db: AsyncSe
 
     async with AsyncSessionLocal() as session:
         try:
+            async def _is_cancelled_for_project(_project_id: str) -> bool:
+                prj_status = await session.execute(
+                    select(BrdProject.status).where(BrdProject.id == _project_id)
+                )
+                status = prj_status.scalar_one_or_none()
+                # Treat missing project as cancelled so background tasks stop after the UI deletes the project.
+                return status is None or status == "cancelled"
+
             result = await session.execute(
                 select(BrdCapture).where(BrdCapture.id == capture_id)
             )
             capture = result.scalar_one_or_none()
             if capture:
+                if await _is_cancelled_for_project(capture.project_id):
+                    return
+
                 transcript_ctx: List[dict] = []
                 if capture.video_id:
                     v_result = await session.execute(select(BrdVideo).where(BrdVideo.id == capture.video_id))
@@ -1663,6 +1718,8 @@ async def _describe_single_capture(capture_id: str, image_path: str, db: AsyncSe
                             window=5,
                         )
                 desc = await frame_describer.describe_frame(image_path, transcript_context=transcript_ctx)
+                if await _is_cancelled_for_project(capture.project_id):
+                    return
                 capture.ocr_text = desc.get("ocr_text", "")
                 capture.description = desc.get("description", "")
                 capture.details_json = {**(capture.details_json or {}), **desc, "transcript_context_window": transcript_ctx}
