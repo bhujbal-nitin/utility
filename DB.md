@@ -68,7 +68,8 @@ See [Section 13](#13-raw-sql--create-all-tables) for the full SQL script.
 │ PK id            │
 │    email         │
 │    hashed_pwd    │
-│    role (enum)   │
+│    roles (json)  │
+│    is_approved   │
 │    is_active     │
 │    created_at    │
 └────────┬─────────┘
@@ -156,7 +157,8 @@ See [Section 13](#13-raw-sql--create-all-tables) for the full SQL script.
 | `id` | `VARCHAR(36)` | **PK** | UUID v4 | Unique user identifier |
 | `email` | `VARCHAR(255)` | **UNIQUE**, NOT NULL, **INDEX** | — | Login email |
 | `hashed_password` | `VARCHAR(255)` | NOT NULL | — | bcrypt hash |
-| `role` | `ENUM(roleenum)` | NOT NULL | `'ba'` | User role (see [Enums](#11-enums)) |
+| `roles` | `JSON` | NOT NULL | `['ba']` | List of user roles (see [Enums](#11-enums)) |
+| `is_approved` | `BOOLEAN` | — | `true` | Approval status for login access |
 | `is_active` | `BOOLEAN` | — | `true` | Soft-delete flag |
 | `created_at` | `TIMESTAMPTZ` | — | `now()` | Account creation timestamp |
 
@@ -323,11 +325,11 @@ Caches AI analysis results for migration tool uploads to avoid re-processing ide
 
 ---
 
-## 11. Enums
+## 11. Enums (Conceptual)
 
-### `roleenum` (PostgreSQL ENUM type)
+### User Roles (Stored in `users.roles` JSON Array)
 
-Used by `users.role`.
+Used by `users.roles` to store one or more of these string values.
 
 | Value | Description |
 |-------|-------------|
@@ -381,7 +383,8 @@ CREATE TABLE IF NOT EXISTS users (
     id              VARCHAR(36)     PRIMARY KEY,
     email           VARCHAR(255)    NOT NULL UNIQUE,
     hashed_password VARCHAR(255)    NOT NULL,
-    role            roleenum        NOT NULL DEFAULT 'ba',
+    roles           JSON            NOT NULL DEFAULT '["ba"]',
+    is_approved     BOOLEAN         DEFAULT TRUE,
     is_active       BOOLEAN         DEFAULT TRUE,
     created_at      TIMESTAMPTZ     DEFAULT NOW()
 );
@@ -594,9 +597,9 @@ async def seed_admin():
     async with AsyncSessionLocal() as session:
         user = User(
             email='admin@automationedge.com',
-            username='admin',
             hashed_password=pwd_context.hash('ChangeMe123!'),
-            role='admin',
+            roles=['admin'],
+            is_approved=True,
             is_active=True,
         )
         session.add(user)
