@@ -1915,19 +1915,26 @@ def _resolve_capture_storage_path(project_id: str, candidate_path: Optional[str]
             return None
 
         project_frames_dir = os.path.join(BRD_FRAMES_DIR, str(project_id))
+        
+        # Check Direct match in project dir
         direct = os.path.join(project_frames_dir, base_name)
         if os.path.exists(direct):
             return os.path.abspath(direct)
 
+        # Legacy fallback in root frames dir
         legacy_root = os.path.join(BRD_FRAMES_DIR, base_name)
         if os.path.exists(legacy_root):
             return os.path.abspath(legacy_root)
 
+        # Aggressive recursive search in project dir
         if os.path.isdir(project_frames_dir):
-            for sub in os.listdir(project_frames_dir):
-                sub_candidate = os.path.join(project_frames_dir, sub, base_name)
-                if os.path.exists(sub_candidate):
-                    return os.path.abspath(sub_candidate)
+            for root, dirs, files in os.walk(project_frames_dir):
+                if base_name in files:
+                    return os.path.abspath(os.path.join(root, base_name))
+                # Even more aggressive: find by capture UUID in filename
+                for f in files:
+                    if base_name in f or (len(base_name) > 8 and base_name[:36] in f):
+                        return os.path.abspath(os.path.join(root, f))
     except Exception:
         return None
     return None

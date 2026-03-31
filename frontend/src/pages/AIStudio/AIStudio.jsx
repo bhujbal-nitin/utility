@@ -11,7 +11,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import SendIcon from "@mui/icons-material/Send";
 import DownloadIcon from "@mui/icons-material/Download";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -331,7 +331,7 @@ function TypingIndicator() {
 }
 
 /* ── ChatWindow ───────────────────────────────────────────────────────────── */
-export default function ChatWindow({ tool, onBack }) {
+export default function AuthContextChatWindow({ tool, onBack }) {
   const config = TOOL_CONFIG[tool.id] || TOOL_CONFIG["brd"];
   const { token } = useAuth();
   const [messages, setMessages] = useState([]);
@@ -799,35 +799,36 @@ export default function ChatWindow({ tool, onBack }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                flexShrink: 0,
-                cursor: input.trim() && !isTyping ? "pointer" : "not-allowed",
-                background: input.trim() && !isTyping ? "#F26522" : "rgba(255,255,255,0.04)",
-                color: input.trim() && !isTyping ? "#fff" : "#506280",
-                boxShadow: input.trim() && !isTyping
-                  ? "0 4px 14px rgba(242,101,34,0.4)"
-                  : "none",
+                cursor: (input.trim() || isTyping) ? "pointer" : "not-allowed",
+                background: (input.trim() || isTyping) ? "#F26522" : "rgba(255,255,255,0.04)",
+                color: (input.trim() || isTyping) ? "#fff" : "#506280",
                 transition: "all 0.2s ease",
-                "&:hover":
-                  input.trim() && !isTyping
-                    ? { background: "#ff7d35", transform: "scale(1.05)" }
-                    : {},
+                "&:hover": {
+                  background: (input.trim() || isTyping) ? "#F26522" : "rgba(255,255,255,0.04)",
+                  transform: (input.trim() || isTyping) ? "scale(1.05)" : "none",
+                },
+                "&:active": {
+                  transform: "scale(0.95)",
+                },
               }}
             >
               <SendIcon sx={{ fontSize: 15 }} />
             </Box>
           </Tooltip>
         </Box>
-
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", pt: 0.3 }}>
-          <Typography sx={{ fontSize: "11px", color: "#506280", pl: 0.3 }}>
-            Press Enter to send · Shift+Enter for new line
-          </Typography>
-          {totalChatTokens > 0 && (
-            <Typography sx={{ fontSize: "11px", color: "#4caf82", pr: 0.3, fontWeight: "bold" }}>
-              Total Tokens: {totalChatTokens.toLocaleString()}
-            </Typography>
-          )}
-        </Box>
+        <Typography
+          sx={{
+            fontSize: "11px",
+            color: "#506280",
+            pl: 0.3,
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+          }}
+        >
+          <span>Press Enter to send · Shift+Enter for new line</span>
+          {totalChatTokens > 0 && <span>Total Session Tokens: {totalChatTokens}</span>}
+        </Typography>
       </Box>
     </Box>
   );

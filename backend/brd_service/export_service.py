@@ -99,6 +99,8 @@ class ExportService:
     def _find_capture_image(self, capture_id: str, captures: List[Dict]) -> Optional[str]:
         """Find the image file for a capture ID, preferring preview (user-edited) images."""
         target_id = str(capture_id).strip()
+        
+        # 1. Search in provided metadata list
         for cap in captures:
             cap_id = str(cap.get("id", ""))
             if cap_id != target_id:
@@ -106,45 +108,46 @@ class ExportService:
 
             project_id = cap.get("project_id")
             frames_subdir = os.path.join(self.frames_dir, str(project_id)) if project_id else ""
-
-            # 1. Prefer preview image (user-cropped/annotated)
-            preview = cap.get("preview_image_path") or ""
-            if preview and os.path.exists(preview):
-                return os.path.abspath(preview)
-            if preview and frames_subdir:
-                alt = os.path.join(frames_subdir, os.path.basename(preview))
-                if os.path.exists(alt):
-                    return os.path.abspath(alt)
-
-            # 2. Try preview by convention: preview_{capture_id}.png
+            
+            # Candidates to check
+            candidate_paths = [
+                cap.get("preview_image_path"),
+                cap.get("image_path")
+            ]
+            
+            # Add subdirectory candidates if project_id exists
             if frames_subdir:
-                conv_preview = os.path.join(frames_subdir, f"preview_{target_id}.png")
-                if os.path.exists(conv_preview):
-                    return os.path.abspath(conv_preview)
+                if cap.get("preview_image_path"):
+                    candidate_paths.append(os.path.join(frames_subdir, os.path.basename(cap["preview_image_path"])))
+                if cap.get("image_path"):
+                    candidate_paths.append(os.path.join(frames_subdir, os.path.basename(cap["image_path"])))
+                # Convention-based preview: preview_PID_CID.png or preview_CID.png
+                candidate_paths.append(os.path.join(frames_subdir, f"preview_{target_id}.png"))
 
-            # 3. Try original image_path
-            path = cap.get("image_path") or ""
-            if path and os.path.exists(path):
-                return os.path.abspath(path)
-            if path and frames_subdir:
-                alt = os.path.join(frames_subdir, os.path.basename(path))
-                if os.path.exists(alt):
-                    return os.path.abspath(alt)
+            for path in filter(None, candidate_paths):
+                if os.path.exists(path) and os.path.getsize(path) > 0:
+                    return os.path.abspath(path)
 
-            logger.warning(f"Capture {capture_id}: no file found (image_path={path}, preview={preview})")
-            return None
-
-        # Capture ID not in captures list at all — scan frames directory for matching files
+        # 2. Aggressive filesystem fallback: scan project directory if possible
         if captures:
             project_id = captures[0].get("project_id")
             if project_id:
-                frames_subdir = os.path.join(self.frames_dir, str(project_id))
-                if os.path.isdir(frames_subdir):
-                    for f in os.listdir(frames_subdir):
-                        if target_id in f:
-                            return os.path.abspath(os.path.join(frames_subdir, f))
+                subdir = os.path.join(self.frames_dir, str(project_id))
+                if os.path.isdir(subdir):
+                    # Check for file containing target_id in its name
+                    for root, dirs, files in os.walk(subdir):
+                        for f in files:
+                            if target_id in f:
+                                return os.path.abspath(os.path.join(root, f))
+        
+        # 3. Global scan in frames_dir (last resort)
+        if os.path.isdir(self.frames_dir):
+            for root, dirs, files in os.walk(self.frames_dir):
+                for f in files:
+                    if target_id in f:
+                        return os.path.abspath(os.path.join(root, f))
 
-        logger.warning(f"Could not resolve image for capture {capture_id} — not in captures list")
+        logger.warning(f"Could not resolve image for capture {capture_id}")
         return None
 
     # ── DOCX Export ───────────────────────────────────────────────────────
@@ -467,37 +470,47 @@ class ExportService:
                     logger.error(f"Mermaid render error (bare): {e}")
                 continue
 
-            # 2. [IMAGE_REF] Resolution
-            image_match = re.search(r"\[IMAGE_REF:([^\]]+)\]", line)
-            if image_match:
-                cap_id = image_match.group(1)
-                img_path = self._find_capture_image(cap_id, captures)
-                if img_path and os.path.exists(img_path) and os.path.getsize(img_path) > 0:
-                    try:
-                        img_buf = self._normalize_image_for_docx(img_path)
+            # 2. [IMAGE_REF] Resolution (handles mid-line or multiple)
+            if "[IMAGE_REF:" in line:
+                # Split line by [IMAGE_REF:id]
+                parts = re.split(r"(\[IMAGE_REF:[^\]]+\])", line)
+                for part in parts:
+                    img_match = re.search(r"\[IMAGE_REF:([^\]]+)\]", part)
+                    if img_match:
+                        cap_id = img_match.group(1)
+                        img_path = self._find_capture_image(cap_id, captures)
+                        if img_path and os.path.exists(img_path) and os.path.getsize(img_path) > 0:
+                            try:
+                                img_buf = self._normalize_image_for_docx(img_path)
+                                new_p = doc.add_paragraph()
+                                new_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                new_p.add_run().add_picture(img_buf, width=Inches(5.0))
+                                insertion_point.addnext(new_p._p)
+                                insertion_point = new_p._p
+                                
+                                cap = next((c for c in captures if c.get("id") == cap_id), None)
+                                if cap:
+                                    cap_p = doc.add_paragraph()
+                                    cap_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                    run = cap_p.add_run(f"Figure: {cap.get('label', 'Screenshot')}")
+                                    run.font.italic = True
+                                    run.font.size = Pt(9)
+                                    run.font.color.rgb = AE_GRAY
+                                    insertion_point.addnext(cap_p._p)
+                                    insertion_point = cap_p._p
+                            except Exception as e:
+                                logger.error(f"Failed to embed capture {cap_id}: {type(e).__name__}: {e}", exc_info=True)
+                                new_p = doc.add_paragraph(f"[Image: {cap_id} - Error embedding]")
+                                insertion_point.addnext(new_p._p)
+                                insertion_point = new_p._p
+                        else:
+                            logger.warning(f"Capture image not found or empty: {cap_id} (resolved path: {img_path})")
+                    elif part.strip():
+                        # Render text part
                         new_p = doc.add_paragraph()
-                        new_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        new_p.add_run().add_picture(img_buf, width=Inches(5.0))
+                        self._add_run_with_markdown(new_p, part.strip())
                         insertion_point.addnext(new_p._p)
                         insertion_point = new_p._p
-                        
-                        cap = next((c for c in captures if c.get("id") == cap_id), None)
-                        if cap:
-                            cap_p = doc.add_paragraph()
-                            cap_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                            run = cap_p.add_run(f"Figure: {cap.get('label', 'Screenshot')}")
-                            run.font.italic = True
-                            run.font.size = Pt(9)
-                            run.font.color.rgb = AE_GRAY
-                            insertion_point.addnext(cap_p._p)
-                            insertion_point = cap_p._p
-                    except Exception as e:
-                        logger.error(f"Failed to embed capture {cap_id}: {type(e).__name__}: {e}", exc_info=True)
-                        new_p = doc.add_paragraph(f"[Image: {cap_id} - Error embedding]")
-                        insertion_point.addnext(new_p._p)
-                        insertion_point = new_p._p
-                else:
-                    logger.warning(f"Capture image not found or empty: {cap_id} (resolved path: {img_path})")
                 i += 1
                 continue
 
@@ -748,33 +761,35 @@ class ExportService:
         while i < len(lines):
             line = lines[i]
 
-            # Handle [IMAGE_REF:capture_id]
-            image_match = re.search(r"\[IMAGE_REF:([^\]]+)\]", line)
-            if image_match:
-                cap_id = image_match.group(1)
-                img_path = self._find_capture_image(cap_id, captures)
-                if img_path:
-                    try:
-                        img_buf = self._normalize_image_for_docx(img_path)
-                        p = doc.add_paragraph()
-                        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                        p.add_run().add_picture(img_buf, width=Inches(5.5))
-                        cap = next((c for c in captures if c.get("id") == cap_id), None)
-                        if cap:
-                            cap_p = doc.add_paragraph()
-                            cap_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                            run = cap_p.add_run(f"Figure: {cap.get('label', 'Screenshot')}")
-                            run.font.size = Pt(9)
-                            run.font.italic = True
-                            run.font.color.rgb = AE_GRAY
-                    except Exception as e:
-                        doc.add_paragraph(f"[Image: {cap_id}]")
-                        logger.error(f"Failed to embed image {cap_id}: {type(e).__name__}: {e}", exc_info=True)
-                else:
-                    # Remove the marker from text and render normally
-                    clean = re.sub(r"\[IMAGE_REF:[^\]]+\]", "", line).strip()
-                    if clean:
-                        doc.add_paragraph(clean)
+            # Handle [IMAGE_REF:capture_id] (mid-line or multiple)
+            if "[IMAGE_REF:" in line:
+                parts = re.split(r"(\[IMAGE_REF:[^\]]+\])", line)
+                for part in parts:
+                    image_match = re.search(r"\[IMAGE_REF:([^\]]+)\]", part)
+                    if image_match:
+                        cap_id = image_match.group(1)
+                        img_path = self._find_capture_image(cap_id, captures)
+                        if img_path:
+                            try:
+                                img_buf = self._normalize_image_for_docx(img_path)
+                                p = doc.add_paragraph()
+                                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                p.add_run().add_picture(img_buf, width=Inches(5.5))
+                                cap = next((c for c in captures if c.get("id") == cap_id), None)
+                                if cap:
+                                    cap_p = doc.add_paragraph()
+                                    cap_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                                    run = cap_p.add_run(f"Figure: {cap.get('label', 'Screenshot')}")
+                                    run.font.size = Pt(9)
+                                    run.font.italic = True
+                                    run.font.color.rgb = AE_GRAY
+                            except Exception as e:
+                                doc.add_paragraph(f"[Image: {cap_id}]")
+                                logger.error(f"Failed to embed image {cap_id}: {type(e).__name__}: {e}", exc_info=True)
+                        else:
+                            doc.add_paragraph(f"[Image: {cap_id} not found]")
+                    elif part.strip():
+                        doc.add_paragraph(part.strip())
                 i += 1
                 continue
 

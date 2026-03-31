@@ -8,6 +8,7 @@ const ROUTES = [
   { prefix: "/api/proposal", target: process.env.REACT_APP_PROPOSAL_PROXY_TARGET || "http://localhost:8002" },
   { prefix: "/api/automation", target: process.env.REACT_APP_AUTOMATION_PROXY_TARGET || "http://localhost:8003" },
   { prefix: "/api/migration", target: process.env.REACT_APP_MIGRATION_PROXY_TARGET || "http://localhost:8004" },
+  { prefix: "/api/admin", target: process.env.REACT_APP_AUTH_PROXY_TARGET || "http://localhost:8000" },
 ];
 
 function isAbsoluteUrl(url) {

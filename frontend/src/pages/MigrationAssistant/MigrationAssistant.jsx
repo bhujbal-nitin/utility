@@ -11,9 +11,9 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import BluePrismChatWindow from "./BluePrismChatWindow";
-import UiPathChatWindow from "./UiPathChatWindow";
-import AutomationAnywhereChatWindow from "./AutomationAnywhereChatWindow";
+import BluePrismAssistant from "./BluePrismAssistant";
+import UiPathAssistant from "./UiPathAssistant";
+import AAAssistant from "./AAAssistant";
 
 /* ── Migration Option Icons (SVG or MUI Icons) ──────────────────────────── */
 const UiPathIcon = () => (
@@ -243,13 +243,13 @@ export default function MigrationHomePage({ tool, onBack }) {
 
     if (selectedOption) {
         if (selectedOption.id === "blueprism") {
-            return <BluePrismChatWindow tool={tool} onBack={() => setSelectedOption(null)} />;
+            return <BluePrismAssistant tool={tool} onBack={() => setSelectedOption(null)} />;
         }
         if (selectedOption.id === "uipath") {
-            return <UiPathChatWindow tool={tool} onBack={() => setSelectedOption(null)} />;
+            return <UiPathAssistant tool={tool} onBack={() => setSelectedOption(null)} />;
         }
         if (selectedOption.id === "automationanywhere") {
-            return <AutomationAnywhereChatWindow tool={tool} onBack={() => setSelectedOption(null)} />;
+            return <AAAssistant tool={tool} onBack={() => setSelectedOption(null)} />;
         }
     }
 

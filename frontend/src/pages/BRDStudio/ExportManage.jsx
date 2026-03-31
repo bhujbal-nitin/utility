@@ -15,12 +15,10 @@ import {
   Paper,
   Grid,
   CircularProgress,
-  Divider,
   Chip,
   Alert,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import DescriptionIcon from "@mui/icons-material/Description";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";

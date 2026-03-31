@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { Box } from "@mui/material";
 import Sidebar from "../components/Sidebar";
-import ChatWindow from "../components/ChatWindow";
-import MigrationHomePage from "../components/MigrationHomePage";
+import AIStudio from "../pages/AIStudio";
+import MigrationAssistant from "../pages/MigrationAssistant";
 import BRDStudio from "../pages/BRDStudio";
+import ProposalAssistant from "../pages/ProposalAssistant";
 import WelcomeScreen from "../components/WelcomeScreen";
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
@@ -26,10 +27,14 @@ export default function DashboardLayout() {
     switch (activeTool.id) {
       case "brd":
         return <BRDStudio onBack={() => setActiveTool(null)} />;
+      case "proposal":
+        return <ProposalAssistant onBack={() => setActiveTool(null)} />;
       case "migration":
-        return <MigrationHomePage tool={activeTool} onBack={() => setActiveTool(null)} />;
+        return <MigrationAssistant tool={activeTool} onBack={() => setActiveTool(null)} />;
+      case "ai-studio":
+        return <AIStudio tool={activeTool} onBack={() => setActiveTool(null)} />;
       default:
-        return <ChatWindow tool={activeTool} onBack={() => setActiveTool(null)} />;
+        return <AIStudio tool={activeTool} onBack={() => setActiveTool(null)} />;
     }
   };
 

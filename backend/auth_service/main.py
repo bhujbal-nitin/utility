@@ -36,6 +36,42 @@ app.include_router(admin_router)
 
 @app.on_event("startup")
 async def on_startup():
+    logger.info("Ensuring all workspace directories exist...")
+    import os
+    from core.config import settings
+    
+    # Base Data Dirs
+    STUDIO_DATA = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "ae_studio_data"))
+    BRD_DATA = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "brd_studio_data"))
+    PROPOSAL_DATA = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "proposal_studio_data"))
+    
+    # Internal folders
+    folders_to_create = [
+        # AI Studio
+        STUDIO_DATA,
+        os.path.join(STUDIO_DATA, "downloads"),
+        os.path.join(STUDIO_DATA, "scripts"),
+        os.path.join(STUDIO_DATA, "card_helpers"),
+        os.path.join(STUDIO_DATA, "templates"),
+        os.path.join(STUDIO_DATA, "hooks"),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "automation_service", "knowledge")),
+        
+        # BRD Studio
+        BRD_DATA,
+        os.path.join(BRD_DATA, "videos"),
+        os.path.join(BRD_DATA, "frames"),
+        os.path.join(BRD_DATA, "exports"),
+        os.path.join(BRD_DATA, "documents"),
+        
+        # Proposal Studio
+        PROPOSAL_DATA,
+        os.path.join(PROPOSAL_DATA, "proposals"),
+        os.path.join(PROPOSAL_DATA, "uploads"),
+    ]
+    
+    for folder in folders_to_create:
+        os.makedirs(folder, exist_ok=True)
+
     logger.info("Initializing database tables...")
     async with engine.begin() as conn:
         # Create tables if they don't exist
@@ -51,11 +87,11 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     if result.scalars().first():
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # By default, first user could be admin, but let's just make it BA. Admin needs DB seeding or script.
     new_user = User(
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
-        role=user_data.role
+        roles=[r.value for r in user_data.roles] if user_data.roles else [RoleEnum.BA.value],
+        is_approved=True
     )
     db.add(new_user)
     await db.commit()
@@ -76,6 +112,9 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
     
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+        
+    # if not user.is_approved:
+    #     raise HTTPException(status_code=403, detail="Account pending admin approval")
 
     access_token = create_access_token(subject=user.id)
     return {"access_token": access_token, "token_type": "bearer"}

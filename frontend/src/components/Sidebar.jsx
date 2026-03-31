@@ -81,7 +81,7 @@ export default function Sidebar({
   const drawerWidth = collapsed ? sidebarCollapsed : sidebarWidth;
 
   const visibleTools = TOOLS.filter(
-    (t) => user?.role === "admin" || t.allowedRoles.includes(user?.role)
+    (t) => user?.roles?.includes("admin") || t.allowedRoles.some(r => user?.roles?.includes(r))
   );
 
   return (
@@ -289,9 +289,9 @@ export default function Sidebar({
             mb: 2,
           }}
         >
-          <Tooltip title={user?.role === "admin" ? "Manage Users" : "Profile Settings"}>
+          <Tooltip title={user?.roles?.includes("admin") ? "Manage Users" : "Profile Settings"}>
             <IconButton
-              onClick={() => user?.role === "admin" && navigate("/admin")}
+              onClick={() => user?.roles?.includes("admin") && navigate("/admin")}
               sx={{
                 width: 32,
                 height: 32,
@@ -332,7 +332,7 @@ export default function Sidebar({
                   letterSpacing: "0.5px",
                 }}
               >
-                ROLE: {user?.role}
+                ROLES: {user?.roles?.join(', ')}
               </Typography>
             </Box>
           )}

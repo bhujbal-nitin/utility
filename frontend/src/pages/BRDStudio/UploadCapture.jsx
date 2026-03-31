@@ -134,7 +134,7 @@ export default function UploadCapture({
     if (String(processingStatus || "").startsWith("Error:")) return;
     if (captures.length === 0) setProcessingStatus("Extracting frames...");
     else setProcessingStatus("Cropping + queuing frames...");
-  }, [captureProcessing, canceling, captures.length]);
+  }, [captureProcessing, canceling, captures.length, processingStatus]);
 
   // During processing, block modal interactions by closing dialogs immediately.
   useEffect(() => {

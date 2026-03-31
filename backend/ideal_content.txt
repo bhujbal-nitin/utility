@@ -1,0 +1,756 @@
+Proposal
+
+for
+
+Invoicing Process Automation
+
+By
+
+Submitted To
+
+Tuesday, July 15, 2025Table of Content
+
+Confidentiality Statement	3
+
+Contact Information	3
+
+1	Executive Summary	4
+
+1.1	Overview of the Project	4
+
+1.2	Business Value	4
+
+2	Scope of Work	6
+
+2.1	Business Requirements	6
+
+2.2	Solution Approach	10
+
+2.3	Project Deliverable	12
+
+2.4	Project Approach & Plan	13
+
+2.5	Assumptions	14
+
+2.6	Out of Scope	15
+
+3	AutomationEdge Deployment	16
+
+3.1	Proposed AutomationEdge Bot (On premises)	16
+
+3.2	Proposed Infrastructure Sizing (For On premises)	16
+
+4	Post Go Live support structure	18
+
+4.1	Post-production Support	18
+
+4.2	Product Support for 1 Year	18
+
+4.3	Operational Support after Post-Production Support	18
+
+5	Pricing and Payment Terms	19
+
+5.1	AutomationEdge Software Cost	19
+
+5.2	Professional Service Costing	20
+
+5.3	Training	20
+
+5.4	Payment Schedule	20
+
+5.5	Payment Terms	21
+
+6	Terms and Conditions	22
+
+7	Automation - A Universal Automation Platform	26
+
+7.1	What is a Universal Automation Platform?	26
+
+Confidentiality Statement
+
+The information contained in this proposal is of a proprietary nature and is not to be revealed or used except for the evaluation of this proposal and/or in the performance of the services proposed herein. This proposal is strictly meant for the addressee or persons within Unity Small Finance Bank (hereinafter referred to as Unity Small Finance Bank) who are designated to evaluate or consider the proposal.
+
+No part of this work may be reproduced or transmitted in any form or by any means, electronic or mechanical, including photocopying and recording or by any information storage or retrieval system, except as may be permitted by AutomationEdge.
+
+AutomationEdge submits this proposal with the understanding that it will be used only in accordance with the stated intent expressed by the addressee in its solicitation.
+
+Proposal Validity: 30 days from the date of the proposal
+
+Contact Information
+
+Local Contact
+
+Executive Summary
+
+Overview of the Project
+
+AutomationEdge is excited to present this proposal to Unity Small Finance Bank for the implementation of our Robotic Process HyperAutomation and Intelligent Document Processing (IDP), which is known as the DocEdge Solution. Our objective is to revolutionize and automate repetitive business processes, driving efficiency and operational excellence across Unity Small Finance Bank’s workflows.
+
+We are honored by the opportunity to partner with Unity Small Finance Bank in this transformative journey. With our proven expertise, cutting-edge technology, and industry-leading consulting services, we are confident in our ability to deliver seamless and impactful automation. Together, we aim to ensure the successful completion of these mission-critical HyperAutomation projects, unlocking new levels of productivity and innovation for Unity Small Finance Bank.
+
+We look forward to building a long-lasting, value-driven partnership.
+
+Business Value
+
+Leveraging RPA and IDP capabilities with AutomationEdge
+
+Elevated Operational Efficiency:
+With AutomationEdge’s Robotic Process Automation (RPA) and Intelligent Document Processing (IDP) businesses can automate repetitive, time-consuming tasks, such as data extraction, invoice processing, and document management. RPA bots, powered by IDP, read and process structured and unstructured data from scanned documents and PDFs, reducing the dependency on manual efforts. This automation ensures employees focus on strategic, high-value activities that foster innovation and growth. The elimination of manual errors coupled with faster task completion transforms operational workflows, ensuring precision and agility across processes.
+
+Significant Cost Reduction:
+By automating high-volume, labor-intensive processes, AutomationEdge’s RPA and IDP solutions significantly reduce operational costs. Tasks like invoice validation or claims processing that traditionally required manual handling can now be fully automated, minimizing the need for human intervention. This automation not only reduces labor costs but also mitigates the risk of costly errors, ensuring seamless business operations with enhanced accuracy.
+
+Accelerated Time to Value:
+AutomationEdge’s RPA and IDP technologies are designed for quick deployment and seamless integration with legacy systems and enterprise applications. The ability to automate complex workflows, including those involving large-scale document processing—translates to faster realization of business value. Enterprises benefit from immediate improvements in efficiency, accuracy, and productivity, significantly shortening the time required to achieve operational excellence compared to traditional IT projects.
+
+Superior Customer Experience:
+RPA and IDP ensure faster, more responsive service delivery by automating key touchpoints in the customer journey. From onboarding new clients to managing service requests or complaints, automated systems can handle data extraction, verification, and processing with speed and precision. AutomationEdge enables companies to meet customer expectations by ensuring accurate and timely responses, enhancing customer satisfaction, and building long-term loyalty. This leads to a superior experience that fosters trust and improves brand reputation.
+
+Scope of Work
+
+Business Requirements
+
+Unity Small Finance Bank is exploring Robotic Process Automation (RPA) and DocEdge for the process given in the requirement section as the scope of work for this engagement.
+
+Process Summary
+
+This is a proposed use case tentatively for budgeting purposes.
+
+Process complexity will be finalized only after detailed requirement gathering.
+
+Effort estimates may vary depending on the complexity of the process and will be communicated to the client with the necessary approvals for commercial.
+
+The scope of work for each use case mentioned here is tentative and will be finalized after detailed requirement gathering only.
+
+PS Efforts are assumed as per Ref. complexity grid sheet, and any deviation in complexity parameters will have corresponding changes in Efforts and need to be approved by the client at actual.
+
+Automation Complexity Matrix
+
+Please refer to the below table for process complexity matrix based on various parameters.
+
+Solution Approach
+
+RPA Solution Approach
+
+The below AutomationEdge robotic process automation (RPA) and Intelligent Document Processing (IDP) solution offers enhanced accuracy, efficiency and time-saving advantages for your business processes.
+
+RPA is ideal when processes involve structured data, or when automating interactions with systems that don't provide API integration, enhancing efficiency without compromising security.
+
+The platform offers multiple recorders that capture and replicate human actions, making it easy to automate processes by mimicking the exact steps performed by a user. When security or system limitations restrict API exposure, this makes it a potent tool that enables the rapid and precise production of bots without requiring a lot of programming.
+
+When legacy systems cannot be upgraded or directly integrated with newer platforms, RPA acts as a bridge by replicating human interactions with these systems, ensuring data transfer and task completion without needing extensive reprogramming or system changes.
+
+The platform can also read and write data using SQL queries on popular relational databases such as Oracle, SQL Server, and MS Access, making it highly versatile for database management.
+
+AutomationEdge bots are equipped to send email alerts, notifications, and generate dashboards or reports to keep stakeholders informed of the automation process. This visibility helps monitor and manage automated workflows effectively.
+
+Intelligent Document Processing (IDP) solution
+
+Project Deliverable
+
+AutomationEdge will provide the following deliverables as a part of implementation:
+
+Note:
+
+All the documentation will be done in English only and may be combined based on suitability of functions.
+
+Any document preparation in non-English language is out of scope.
+
+Project Approach & Plan
+
+Implementation Approach
+
+Training
+
+Training will be delivered on a ‘Train the Trainer’ basis for development and admin staff (max. 3 count).
+
+Web-based training for 3 working days, 2 (two) hours per day.
+
+Scope of Training:
+
+a) AutomationEdge workflows 
+b) Development Studio and predefined example of how to automate processes/use cases
+
+c) Prerequisite: Trainees need to know Java.
+
+Additional duration and scope of training are chargeable.
+
+This training will help you to enable your team to take up the tasks of automation using the AutomationEdge platform on their own.
+
+Further to get expertise on the product and enrich the product knowledge, this team can undergo the AutomationEdge Certification course as per the below link.
+
+Please refer https://automationedge.com/automationedge-academy/
+
+Timeline
+
+Implementation of AutomationEdge in Development/Test and Production will be completed as per the below timeline, covering the scope activities mentioned in this SOW as part of implementation.
+
+Note:
+
+Abbreviation: W – Week (e.g., W1, W2, etc.).
+
+Project Start Date, Each Milestone, and Target dates will be finalized after detailed discussions and agreement between AutomationEdge and the client’s leadership team.
+
+Assumptions
+
+A persistent data store like PostgreSQL server will be used for saving application statistics.
+
+The implementation will be for English language only.
+
+The client will provide VPN access and system connectivity for the consultant's access of Target Systems (if required).
+
+Any delays or inconsistencies in the provision of any hardware, software, requested data, system access, credentials, installations, logistics, availability of resources, approvals (maximum 3 days), or information as per the project plan by the client will impact the SOW schedule and cost and will be dealt with a Change Request (CR).
+
+Access to the common email box and in-house system will be provided by the client team before the development starts.
+
+AutomationEdge will perform the service from one (1) offshore location. Additional onsite visits/travel will entail additional travel and labor costs at AutomationEdge current T&M rates.
+
+Lead-time required for on-site resources will be approximately four weeks from the date of PO.
+
+Any acquisition, installation, configuration, and maintenance of Non AutomationEdge software and hardware will not be included, unless otherwise stated in this document as part of scope.
+
+If any installed software, tables, rules, custom scripts, etc. are removed or modified without prior notification and consent of the designated AutomationEdge personnel, then any activity required to re-establish the prior configuration will be considered out-of-scope for RPA implementation.
+
+Estimated efforts will vary depending on complexity and deviations from assumptions, which can be only estimated after the requirement gathering workshop during the feasibility study. This may impact on project timelines and commercials, and the same will be communicated to clients after re-estimation.
+
+Upon completion of a milestone, AutomationEdge will issue a milestone completion notification for approval by the client. Should the client not remit a signed copy of the Milestone Completion Letter and not produce a reason for non-approval within three (3) business days after letter submission, AutomationEdge will assume that the client approves the Milestone Completion Letter, and AutomationEdge will invoice the client as per procedure.
+
+Any change in the requirement (minor or major) after requirement sign-off will be considered a change request, and based on the complexity of the change, efforts and commercials will be shared with the client.
+
+Out of Scope
+
+AutomationEdge Deployment
+
+Proposed AutomationEdge Bot (On premises)
+
+Below are the proposed software license requirements for automation deployment.
+
+Note
+
+Agent in the above estimates is applicable for one production instance only.
+
+Clients can add more licenses (robotic agents) as per future growth of process volumes.
+
+The suggested number of bot licenses is based on our current understanding of the scope, including the number of processes to be automated and the expected concurrency requirements. However, the final number of bot licenses required may increase or decrease once the full scope and specific process requirements are clarified during the discovery and implementation phases.
+
+Proposed Infrastructure Sizing (For On premises)
+
+Below are the infra requirements/prerequisites for on-premises
+
+*Count of servers may increase based on the actual requirements and volumes to be processed and will be communicated to the client accordingly after understanding the actual business requirements.
+
+Note:
+
+Count of servers/desktops may increase/decrease based on the actual requirements and volumes to be processed and will be communicated to the client accordingly during project execution.
+
+All PC/VM/Desktops should be in the same domain to work as co-related.
+
+AutomationEdge comes with its own database (PostgreSQL); however, it can be installed using Oracle or MSSQL as a database if required by the client at additional costs.
+
+Database is to be maintained (back-up, archival) by the client team. Necessary inputs will be given by the project team.
+
+Connectivity of Target systems from AutomationEdge Server is to be provisioned along with REST APIs.
+
+Power user rights of the target systems to perform the required actions.
+
+Power user rights for login and installation on provided VM/PC/Desktops for AutomationEdge servers.
+
+OCR and Gen AI cloud services URLs should be whitelisted and accessible from the respective agent machine.
+
+Post Go Live support structure
+
+Post-production Support
+
+AutomationEdge will provide 2 weeks of support services in local working hours after the final technical deliverable moved to production. (Post-production support from offshore)
+
+AutomationEdge will ensure the up-and-running of the implemented system in the client environment.
+
+AutomationEdge will do the initial diagnosis issues and will put in the best efforts to correct and re-test the defect discovered/scalability.
+
+Product Support for 1 Year
+
+AutomationEdge product support team will provide support for the product defects or issues for 1 year. Product support is available via phone, email, and web during all product technical support stages.
+
+Product technical support will be provided by AutomationEdge. Product support based on the terms and conditions of the client license agreement with AutomationEdge. (for 1 year from the date of PO or license installation, whichever is earlier)
+
+Product support SLA: Please refer to the below link.
+
+https://automationedge.com/response-sla/
+
+Operational Support after Post-Production Support
+
+Operational support will be applicable at the agreed-upon Daily Rate/Engineer for any support-related work once post-production support is finished.
+
+AutomationEdge will perform routine planned maintenance activities and minor or major enhancements in concurrence with the client. AutomationEdge will present the maintenance activity report after each scheduled activity as a part of post-Go-Live support from offshore.
+
+This will be provided on request from the client (from offshore) as operational support on a Monthly/Annual billing basis.
+
+Note: Client to provide remote access (VPN connectivity) to project consultants during support period
+
+Pricing and Payment Terms
+
+AutomationEdge Software Cost
+
+*Note
+
+Licenses are valid as per the above pricing term, and it will start from the date of PO or license installation, whichever is earlier, and cannot be extended beyond this period under any circumstances.
+
+If clients need an additional BOT or DocEdge Pack licenses in the future due to increased volume or any other reason, there will be an extra charge.
+
+The client agrees to process documents/pages within the volume defined in the proposal. Exceeding the agreed limit will require an additional purchase.
+
+Any page consumption beyond the DocEdge UAT free limit will be charged as per the production license.
+
+DocEdge page consumption subscription base and remaining count will expire after 1 year.
+
+Professional Service Costing
+
+*Note: Above efforts are proposed based on current understanding of the process complexities. 
+If complexity level changes for a process, then corresponding efforts for the process will change.
+
+Training
+
+Please refer only to the Foundation Training course from the below link.
+https://automationedge.com/automationedge-academy/
+
+Please register for AutomationEdge Online Foundation training.
+
+https://academy.automationedge.com/
+
+Payment Schedule
+
+Payment Terms
+
+Please note that taxes, government charges, duties, levies, and any additional taxes may vary from country to country, and all these payments must be paid by the client.
+
+License cost to be paid 100% in advance.
+
+The costs for professional services implementation and operational support implementation will be paid according to the established milestones.
+
+Invoices are due within 30 days of receipt. A late payment fee of 2% per month will apply for overdue invoices.
+
+License fees and professional services cost will increase by 10% year-over-year at the beginning of each financial year.
+
+No other department or business entity is permitted to use the same without prior written consent or a valid commercial agreement.
+
+This agreement is for 1 year.
+
+The travel, stay, and per diem charges of onsite resources, if any, will be borne by the client.
+
+Terms and Conditions
+
+Definitions
+
+Bot: An automated software program that performs tasks or workflows without human intervention.
+
+Workflow: A sequence of automated tasks or steps within a business process.
+
+License: A legal authorization to use AutomationEdge software.
+
+Intelligent Automation: The use of AI and machine learning to automate complex tasks and processes.
+
+Duration of Project Agreement
+
+Start and End Dates: The contract covers AutomationEdge’s services from [start date] to [end date].
+
+The contract and PO will be X years non-cancellable.
+
+Renewal Options: The contract may be extended under mutually agreed terms if continued services or support are needed.
+
+The project will commence as per the start date and end date, which are mentioned in the duration of the Project Agreement. Milestones will be established, and timelines will be adjusted based on any dependencies on third-party vendors or approvals.
+
+Scope Changes (Change Management)
+
+Process for Scope Changes: Any changes to the agreed-upon scope, such as adding new bots or workflows, will require a written request and may result in revised pricing and timelines.
+
+Impact on Cost and Timeline: Significant changes to the scope may require additional cost and adjustments to the project timeline.
+
+License Usage Terms
+
+Licenses cannot be transferred to third parties or used in regions outside those agreed upon without prior written consent from the service provider.
+
+License Commencement and Renewal: The license term shall commence on the earliest date that any of the following instances are provisioned: Development, User Acceptance Testing (UAT), or Production. The annual renewal date for the license shall be calculated from this initial commencement date.
+
+License Modifications: Any modifications to the licensed software, including but not limited to increases in the number of agent threads, step units, minutes, premium steps, or Process Studio instances, shall be effective till the anniversary date of the current license term (the "Renewal Date"). Payment for such modifications shall be calculated on a pro-rata basis from the date of modification to the renewal date. The PO should be raised according to this pattern.
+
+Complimentary Agent Threads: As part of the AutomationEdge (AE) license, the client shall receive complimentary agent threads as follows: the greater of (a) 10% of the total number of production agent threads, or (b) one (1) agent thread for each of the development and UAT instances. Any agent threads required in excess of this complimentary allocation shall be purchased by the client at the then-current list price.
+
+Complimentary Process Studios: As part of the AutomationEdge license, the client shall receive complimentary Process Studio licenses as follows: the greater of (a) 20% of the total number of Production agent threads, or (b) two (2) Process Studios for each of the Development and UAT instances. Any Process Studio licenses required in excess of this complimentary allocation shall be purchased by the client at the then-current list price.
+
+Complimentary Step Units: Each licensed agent thread includes a complimentary allocation of five hundred (500) step units. Any step units required in excess of this complimentary allocation shall be purchased by the client at the then-current list price.
+
+Machine Association (MAC ID):
+
+Each AutomationEdge license is uniquely associated with a physical or virtual machine identified by its physical (MAC) address. A maximum of one (1) MAC address may be associated with each development, UAT, and production license. The client is solely responsible for ensuring that the designated machines or infrastructure (whether physical or virtual) possess a permanent and unique MAC address for the purpose of AutomationEdge license deployment.
+
+The software licenses provided are restricted to use solely within the specified regions and are tied to particular machines based on Mac ID.
+
+Confidentiality
+
+Both AutomationEdge’s proprietary technology and the client’s data will be treated as confidential by both parties and will not be shared without permission.
+
+Intellectual Property (IP) Rights
+
+All software and tools developed by the service provider remain the intellectual property of the service provider.
+
+The client is granted a subscription, non-transferable license to use any custom automation workflows or scripts developed during the project solely for its internal operations.
+
+Warranties and Guarantees
+
+Service Quality: AutomationEdge guarantees the delivery of functional automation solutions as outlined in the proposal.
+
+Client Obligations: The client is responsible for providing necessary access to systems, resources, and data for the successful implementation of automation solutions.
+
+Payment Terms
+
+Due Dates: Payment schedules will be clearly outlined, including penalties for late payments. Additional charges may apply for changes to the scope.
+
+Limitation of Liability
+
+AutomationEdge's liability for any damages arising from the use of its services or products shall be limited to the total fees paid by the client.
+
+Termination
+
+This agreement cannot be terminated for convenience by either party. Termination shall only occur under the following circumstances:
+
+Termination for Cause: Either party may terminate the agreement with immediate effect if the other party materially breaches the agreement and fails to remedy such breach within 30 days of receiving written notice of the breach.
+
+Mutual Agreement: The agreement may only be terminated by mutual written consent of both parties.
+
+In the event of termination:
+
+The client will pay for all work completed and delivered up to the date of termination.
+
+The service provider will return or destroy any confidential information belonging to the client, as instructed.
+
+Force Majeure
+
+AutomationEdge is not responsible for delays or failures caused by unforeseen events such as natural disasters or global crises.
+
+Dispute Resolution
+
+Disputes will be resolved through mediation or arbitration in a neutral location agreed upon by both parties.
+
+Non-Compete and Non-Solicitation
+
+Client may not hire AutomationEdge employees or replicate AutomationEdge’s automation solutions internally.
+
+Data Protection and Compliance
+
+Client Data: AutomationEdge ensures encryption and secure handling of client data, with retention policies outlined clearly.
+
+Development Location and Costs:
+
+The primary development location shall be agreed upon in the project proposal. Any changes to the development location during the project execution may result in additional costs, which will be mutually agreed upon.
+
+If the client requests a change in the development location, the project team will assess the impact on project timelines, costs, and resources. Any additional costs incurred due to the change will be communicated to the client in writing.
+
+Hardware Location and Costs:
+
+The primary hardware location shall be agreed upon in the project proposal.
+
+If the client decides to move the hardware to a different location, there will be additional charges for any necessary development or setup work. This will be discussed and mutually agreed upon before any work begins.
+
+Mergers & Acquisitions
+
+Licenses or automation solutions provided under this agreement cannot be transferred or assigned in the event of a merger or acquisition without the explicit written consent of the service provider.
+
+Future Upgrades and Scalability
+
+The solution is designed to be scalable to accommodate additional processes or automation requirements in the future. Pricing for any additional bots or modules will be negotiated separately.
+
+Automation - A Universal Automation Platform
+
+The modern business landscape demands agility, efficiency, and innovation. A single technology platform cannot handle this expectation efficiently. To bridge this gap and meet the expectations of modern business, we are introducing the Universal Automation Platform.
+
+What is a Universal Automation Platform?
+
+A Universal Automation Platform (UAP) is a technology platform that enables modern businesses and enterprises to achieve enterprise-wide automation using the best-suited technology. This comes along with additional offerings like enterprise-wide process visibility, analytics, multichannel access, etc. 
+Let us take a look at how each of the components in AutomationEdge's UAP assists a digital enterprise and what role they play in a larger ecosystem.
+
+Intelligent Capabilities (Input AI)
+
+Chatbot
+
+Integration with MS Teams, WhatsApp, and custom webchats
+
+Tight integration with the AutomationEdge platform for end-to-end user journeys
+
+Optional integration with GenAI for enhanced user experience and Knowledge Management
+
+Artificial Intelligence & Machine Learning (AI/ML)
+
+Leverage the power of AI and ML to make your processes smarter.
+
+Automatic classification and assignment of tickets
+
+Intent-entity detection in unstructured data
+
+Anomaly detection, fraud detection, etc.
+
+Intelligent Document Processing (IDP)
+
+Automate the extraction, classification, and validation of data from documents.
+
+Reduce manual effort and errors in document processing.
+
+No complex model training for data extraction
+
+GenAI
+
+Enhanced Knowledge Management for better and efficient retrieval of information
+
+Improved employee experience in HR, IT and facilities using a GenAI-based chatbot
+
+AI-Assistant for complex data analysis
+
+Core Capabilities (Automation, Processing & Analytics)
+
+Robotic Process Automation (RPA)
+
+Automate repetitive, rule-based tasks across various applications and systems.
+
+Reduce human error and improve accuracy in process execution.
+
+Free up employees to focus on higher-value, strategic activities.
+
+Achieve rapid ROI and cost savings through automation.
+
+IT Process Automation (ITPA)
+
+Streamline IT operations and service delivery through automation.
+
+Automate incident management, change requests, and provisioning.
+
+Improve IT responsiveness and reduce downtime.
+
+Enhance IT service quality and efficiency.
+
+Extract-Transform-Load (ETL)
+
+Integrate data from disparate sources for data compliance and automation
+
+Ensure data quality and consistency for informed decision-making.
+
+Enable data-pipeline processing
+
+Lightning-fast processing of tabular data
+
+Integrations
+
+Connect various systems and applications across your enterprise with 750+ ready connectors.
+
+Enable seamless data flow and process orchestration.
+
+Tight integration between AutomationEdge and various ITSM, CRM and other business systems for end-to-end process automation
+
+Advanced Capabilities (Beyond Basic Automation)
+
+Workload Automation (WLA)
+
+Orchestrate and automate complex, batch-oriented workloads across diverse systems.
+
+Detailed job monitoring system
+
+Dependency management through workflows
+
+Service Orchestration
+
+Coordinate and automate complex service workflows across multiple systems and teams.
+
+Break down silos and foster collaboration across departments.
+
+Achieve a unified view of your business operations.
+
+Ensure efficient and timely delivery of end-to-end services.
+
+Analytics
+
+Leverage advanced analytics to gain actionable insights from Automation and other data.
+
+Monitor performance, identify trends, and make data-driven decisions.
+
+Multichannel
+
+Provide seamless access to automation via across various channels.
+
+Enable vendors, customers & employees to interact with your business through their preferred channels.
+
+Automation can be accessed via custom apps, APIs, chatbots and other triggers.
+
+To summarize…
+
+AutomationEdge Universal Automation Platform empowers your organization to achieve tangible business outcomes:
+
+Increased efficiency and productivity gains
+
+Reduced costs and improved ROI
+
+Enhanced customer experiences and satisfaction
+
+Accelerated innovation and time to market.
+
+Greater agility and resilience in the face of change
+
+--- End of Document ---
+
+
+--- TABLE ---
+Your Point of Contact for this document | Your Point of Contact for this document
+Name | Sauhard Pal
+Title | Manager Business Development– AutomationEdge
+Mailing Address | 4th Floor, Global Port, Near, Sus Pashan Brg, above Audi Showroom, Mohan Nagar Co-Op Society, Baner, Pune, Maharashtra 411021
+Email | sauhard.pal@automationedge.com
+Mobile | +91-8299711738
+-------------
+
+
+--- TABLE ---
+Process Name | Invoicing Process
+SME/User Name Details(Name , Email, Phone No) | Irfan Ahmed Abdul Rashid Shaikh
+No of Applications involved in this Process | Oracle Cloud
+Nature Of Processing(UI reading & Writing. Data Massaging, API Interface, DB Access) | UI Reading & Writing Data Massaging DB Access
+User Profile(No of roles(Maker/Checker), Approver) | Maker  Approvers
+No.of Users(In each User Profile) No Of Maker/Checker | 15 - Maker 13-15 - Approvers
+Frequency of Execution(Continuous, Daily, Weekly, Monthly) & Location of Processing | Daily (Including Weekends)
+End to end process completion time & Step wise time taken(List the major step details and time taken) | 15-2 Hours
+TAT/SLA requirement(Time) | 7 Days TAT for Maker
+User working Hours for the Process(Continuous & Daily processes start & End time) For other Processes(Weekly, Monthly. Daily) Start & End Time | 15-2 Hours  per case depending on complexity
+Process Trigger point/How Input is received/How activity is starting? Email/Queue in Application/DB Record/SFTP/Folder | Email
+Volume(Daily/Weekly/Monthly/Quarterly/Yearly) No of Records/Cases/Files | 3000-5000 Invoices Monthly
+No.of Input Files involved per case | 1. Invoice PDF – always present. 2. Supporting Documents – optional (can be multiple, in PDF or Excel format). 3. PRF Excel File – contains details for Oracle entry (usually present). 4. Approver Master file/Email Body – treated as input since it may contain approver details. – treated as input since it may contain approver details.
+Type of Input File(Txt/xls/xlsx/PDF/Tiff/JPEG/PNG) | PDF Excel
+OCR/NLP /Machine Learning Requirement Provide Details | OCR
+Provide Description of Data in input file For Excel-No of rows/column For PDF-Describe content in the document | NA
+No of Output files to be generated per case | NA
+Type of Output File(Txt/xls/xlsx/PDF) | NA
+Provide Description of Data in Output file For Excel-No of rows/column For PDF-Describe content in the document | NA
+Pain Areas(Scaling Up/Volume Variation/TAT Reduction/Manual Error/Too many rules & exception Handling/Validations & Calculations/Customer Experience | 1. Time Consuming  2.  Repetitive Work 3. Manual Errors
+Process Summary (High level steps) | Email Monitoring and File Download: Monitor a specific email ID where all invoice-related documents are received. Email contains: PDF copy of the invoice. Supporting documents (Excel/PDF) from an internal team – these vary and are not standardized. An Excel file named PRF, containing invoice details required for Oracle input. BOT downloads all attachments. For invoices up to ₹1,00,000: Either Agreement or Purchase Order (PO) is mandatory. For invoices upto 5 lakh: Both Agreement and PO are required. For invoices above ₹5,00,000: Must go through Approval Matrix validation, with all necessary approval trail and authorization documents attached. Data Extraction: Extract required fields from the invoice PDF and supporting Excel files. Each vendor (approx. 3000 vendors) has a different invoice template – no standard format or file naming convention is followed. The first step is to verify whether the invoice is addressed to Unity Bank, as at times, invoices meant for other entities are mistakenly shared with Unity. Extract essential fields like: Invoice No., Supplier Name, Bank Details, Amount, GST, Invoice Date, etc. 3.   Oracle Cloud Login: BOT logs into Oracle Cloud using provided username and password. The session automatically times out after every 8 hours, requiring the user to log in again. An OTP received via email is required once every 24 hours. For the rest of the day, login can be done using only the User ID and Password. 4.  Invoice Duplication Check: Search using Invoice No. If "Result Not Found" appears, proceed with invoice upload. If an existing entry is found, skip the invoice and move to the next one. 5.  Invoice Upload – General Tab: Click Create to initiate new invoice entry. Enter Supplier Name. Select appropriate Supplier Site Location from dropdown. The layout auto-fills supplier-related details — cross-verify with invoice-extracted data. 6. Bank Details Verification: If bank details are available on the invoice, cross-check with the supplier layout. Validate Account No., IFSC, etc. 7.  Invoice Classification and Entry: Select Invoice Type (e.g., Tax Invoice, IRN). In the Description tab, enter a comment like: "Payment towards advertising expense." (Note: This varies based on service type.) In Payment Terms, always select Immediate from the dropdown. Enter Invoice Date from the PDF. 8.   Attachment Upload: Click the Attachment icon and upload: Invoice PDF. All supporting documents received in the email. The email body itself. 9. Accounting Tab: Enter the GST Number of the supplier. 10. Additional Information Tab: Enter the Requester’s Email ID (i.e., the internal team member who shared the invoice). 11. Approver Details Handling: Approver name is usually available in the Excel file named PR Google Ads or similar (this may vary by vendor). If not available in the Excel, extract the approver name from the email body. Use the Master Approver List to identify the Department Name based on the Approver’s name. 12.  General Tab – Line Level Entry: Click on Line Level section. Enter the Base Amount. In Distribution Combination, input segments like:   Entity   Location Code   GST details Any other allocation details as per invoice. 13.  Tax Calculation and Validation: Click the Refresh icon to auto-calculate tax. If the Total section shows a Green Tick, all allocations are correct. If an Exclamation Mark appears, it indicates an issue in allocation. 14.  Save Invoice: Click Save on the right side. A confirmation Pop-up will appear confirming the invoice is saved.
+-------------
+
+
+--- TABLE ---
+# | Note for Proposed Intelligent Document Processing Solution
+1 | Document will be in English language only.
+2 | Documents are in PDF, Excel file format as per scope with a maximum 5-degree tilt in the document.
+3 | Average field level extraction accuracy for printed fields will be 80% and above for 200 dpi scanned English documents with an 11-point font size.
+4 | Highlighted text, overwritten text, scratched text, bounding boxes around text, strikethrough text, poor quality images, and poorly pixelated text decrease the accuracy of the output, as they may interfere with the model's ability to accurately recognize and interpret the text.
+5 | If some fields are not present in the document, then those will be kept blank in the output.
+6 | 0.06% to 0.09% of fields may result in false positives with high confidence, depending on text size and document quality.
+7 | Automation will be deployed at on-premises servers provisioned by the client.
+8 | A sufficient sample of all document types covering the format variations will be provided to train/retrain/validate for the AutomationEdge environment.
+9 | Manual verification and correction using DocEdge UI for the documents meant for manual verification is to be done by the client team (maker-approver) to achieve ~100% accuracy.
+-------------
+
+
+--- TABLE ---
+Sr. No. | Project Deliverable
+1 | Business Requirement Documentation
+2 | Project Plan
+3 | Solution Design and Configuration
+4 | AutomationEdge Workflows
+5 | Training Manual/Guide
+-------------
+
+
+--- TABLE ---
+Activities | Weeks | Weeks | Weeks | Weeks | Weeks | Weeks | Weeks | Weeks | Weeks
+Activities | W1 | W2 | W3 | W4 | W5 | W6 | W7 | W8 | W9
+Project Planning |  |  |  |  |  |  |  |  | 
+Business Process Requirement Gathering, System Access for Dev |  |  |  |  |  |  |  |  | 
+Proposed Solution Design |  |  |  |  |  |  |  |  | 
+Build (Dev & UAT) |  |  |  |  |  |  |  |  | 
+Training |  |  |  |  |  |  |  |  | 
+Validate (SIT & UAT) |  |  |  |  |  |  |  |  | 
+Deploy (Pilot Launch) |  |  |  |  |  |  |  |  | 
+Handover to Operations Team |  |  |  |  |  |  |  |  | 
+Support for 2 Week (Offshore) |  |  |  |  |  |  |  |  | 
+-------------
+
+
+--- TABLE ---
+# | Out of Scope Description
+1 | Any hardware and associated software procurement, licensing, installation, and support.
+2 | Surface Automation, Integration with any 3rd Party applications, SMS Gateway Integration, Development of Web Services or APIs, Citrix applications.
+3 | Any activity related to non-English linguistic provisions of training.
+4 | HA and DR setup
+5 | Customizations that are not mentioned under the scope section are out of scope.
+6 | Any language support that is not mentioned under this scope section.
+-------------
+
+
+--- TABLE ---
+Sr. No. | Process | No. of Workflow Functions | Bot Count for Commercial
+1 | Business Process Automation | Total Workflows Invoicing Process Automation | AutomationEdge RPA Three Unassisted BOT
+1 | Business Process Automation | IDP With 1,00,000 number of pages/Year | AutomationEdge IDP License | Per page processing Annual Pages for 1,00,000
+1 | Business Process Automation | IDP With 1,00,000 number of pages/Year | AutomationEdge DocEdge Repair Station (5 User Pack) Limit to total 5 total users, expires 1 Year from activation
+-------------
+
+
+--- TABLE ---
+Production Environment (On premises) | Production Environment (On premises) | Production Environment (On premises) | Production Environment (On premises) | Production Environment (On premises) | Production Environment (On premises) | Production Environment (On premises) | Production Environment (On premises) | Production Environment (On premises) | Production Environment (On premises)
+No. of Servers (Qty) | Applications / Module | Server | CPU | Core | RAM | HD | Operating System | DB | Web Server
+No. of Servers (Qty) | Applications / Module | Server | CPU | Core | (GB) | (GB) | Operating System | DB | Web Server
+2 | AutomationEdge Main Server & Processing Server including Active MQ, PostgreSQL DB, DocEdge Application Server, Processing Server and Repair Station | VM | 1 | 4 | 16 | 1000 | MS Windows Server 2019/2022   - 64 bit and above | PostgreSQL (Default) | Apache Tomcat
+-------------
+
+
+--- TABLE ---
+UAT Environment (On premises) | UAT Environment (On premises) | UAT Environment (On premises) | UAT Environment (On premises) | UAT Environment (On premises) | UAT Environment (On premises) | UAT Environment (On premises) | UAT Environment (On premises) | UAT Environment (On premises) | UAT Environment (On premises)
+No. of Servers (Qty) | Applications | Server | CPU | Core | RAM | HD | Operating System | DB | Web Server
+No. of Servers (Qty) | Applications | Server | CPU | Core | RAM | HD | Operating System | DB | Web Server
+1 | AutomationEdge Main Server, Active MQ, PostgreSQL DB & Processing Server, DocEdge Appln Server, Processing Server and Repair Station | VM | 1 | 4 | 16 | 500 | MS Windows Server 2019 - 64 bit and above | PostgreSQL (Default) | Apache Tomcat
+-------------
+
+
+--- TABLE ---
+Development Environment (Desktop Systems for Offshore Development) | Development Environment (Desktop Systems for Offshore Development) | Development Environment (Desktop Systems for Offshore Development) | Development Environment (Desktop Systems for Offshore Development) | Development Environment (Desktop Systems for Offshore Development) | Development Environment (Desktop Systems for Offshore Development) | Development Environment (Desktop Systems for Offshore Development) | Development Environment (Desktop Systems for Offshore Development) | Development Environment (Desktop Systems for Offshore Development) | Development Environment (Desktop Systems for Offshore Development)
+No. of desktops (Qty) | Applications | Server | CPU | Core | RAM | HD | Operating System | DB | Web Server
+No. of desktops (Qty) | Applications | Server | CPU | Core | RAM | HD | Operating System | DB | Web Server
+2 | Desktop Development Machine for Script Development | Desktop / VM with Remote Access | 1 | 4 | 8 | 500 | Windows 10 Professional - 64 bit and above | PostgreSQL (Default) | NA
+2 | Desktop Development Machine for Script Development | Desktop / VM with Remote Access | 1 | 4 | 8 | 500 | Windows 10 Professional - 64 bit and above | PostgreSQL (Default) | NA
+-------------
+
+
+--- TABLE ---
+No. | Annual Subscription Based License Line Item | No. of Units | Cost/Unit/Year | Total Cost | Discounted Cost
+No. | Annual Subscription Based License Line Item | No. of Units | INR | INR | INR
+1 | AutomationEdge RPA Three Unassisted BOT | 3 | 3,00,000 | 9,00,000 | XXXXXX
+2 | RPA UAT BOT License | 1 | Free | Free | Free
+3 | RPA Development BOT License | 1 | Free | Free | Free
+4 | RPA Process Studio | 2 | Free | Free | Free
+5 | AutomationEdge IDP License | Per page processing Annual Pages for 1,00,000 | 1 Pack | 4 Rs/Page | 4,00,000 | XXXXXX
+6 | AutomationEdge DocEdge Repair Station, (5 User Pack) Limit to total 5 total users, expires 1 Year from activation | 1 Pack | 12,000 Rs/ User/Yr | 60,000 | XXXXXX
+7 | DocEdge UAT | 500 Pages /Month | Free | Free | Free
+Total | Total | Total | Total | 13,60,000 | XXXXXX
+-------------
+
+
+--- TABLE ---
+No. | Professional Services Implementation Cost                 (One Time) | Delivery Model | No. of Units (Days) | Cost/Unit /Consultant | Total Cost | Discounted Cost
+No. | Professional Services Implementation Cost                 (One Time) | Delivery Model | No. of Units (Days) | INR | INR | INR
+1 | Install and configure AutomationEdge RPA environment | Offshore | 1 Instance | 4,00,000 | 4,00,000 | XXXXX
+2 | Implementation of Automation of Invoicing Process using RPA | Offshore | 50 | 10,000 | 5,00,000 | XXXXX
+3 | Install and configure DocEdge environment | Offshore | 1 Instance | 4,00,000 | 4,00,000 | XXXXX
+4 | Implementation of Data Extraction from Invoice using DocEdge | Offshore | 40 | 10,000 | 4,00,000 | XXXXX
+5 | Postproduction Support | Offshore | 20 | 10,000 | 2,00,000 | XXXXX
+Total | Total |  |  |  | 19,00,000 | XXXXX
+-------------
+
+
+--- TABLE ---
+No. | Training (One Time) | No of User | Cost / Unit Day | Total Cost
+No. | Training (One Time) | No of User | INR | INR
+1 | AutomationEdge Online foundation training | 2 | Free | Free
+Total | Total |  |  | Free
+-------------
+
+
+--- TABLE ---
+Sr. No. | Invoice Milestone Details | Amount
+1 | Advance along with PO | 50%
+2 | User Acceptance Testing Completion or XXX number of days/weeks from the PO issuance whichever is earlier | 40%
+3 | Production Go-Live or XXX number of days/weeks from the PO issuance, whichever is earlier | 10%
+-------------
+

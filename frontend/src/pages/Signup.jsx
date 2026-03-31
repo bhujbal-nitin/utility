@@ -8,7 +8,7 @@ const AUTH_BASE_URL = "/api/auth";
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("ba");
+  const [roles, setRoles] = useState(["ba"]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -22,7 +22,7 @@ export default function Signup() {
       await axios.post(`${AUTH_BASE_URL}/register`, {
         email,
         password,
-        role
+        roles
       });
       setSuccess(true);
       setTimeout(() => navigate("/login"), 3000);
@@ -111,9 +111,10 @@ export default function Signup() {
               <Select
                 labelId="role-select-label"
                 id="role-select"
-                value={role}
-                label="Select Role"
-                onChange={(e) => setRole(e.target.value)}
+                multiple
+                value={roles}
+                label="Select Role(s)"
+                onChange={(e) => setRoles(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
                 sx={{ 
                   color: "white", 
                   ".MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255,255,255,0.23)" },

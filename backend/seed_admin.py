@@ -21,7 +21,8 @@ async def seed():
         result = await session.execute(select(User).where(User.email == "admin@autoedge.com"))
         user = result.scalars().first()
         if user:
-            user.role = RoleEnum.ADMIN
+            user.roles = [RoleEnum.ADMIN.value]
+            user.is_approved = True
             await session.commit()
             print("Admin user promoted!")
         else:

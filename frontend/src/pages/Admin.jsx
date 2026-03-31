@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Box, Typography, Container, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Select, MenuItem, CircularProgress, Alert } from "@mui/material";
+import { Box, Typography, Container, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Select, MenuItem, CircularProgress, Alert, Button } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
+import axios from "axios";
 
 const ROLES = ["admin", "ba", "sales", "automation", "ae"];
 
@@ -12,29 +13,64 @@ export default function Admin() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await api.get("/admin/users");
+      const token = localStorage.getItem("edge_token");
+      const res = await axios.get("/api/admin/users", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       setUsers(res.data);
     } catch (err) {
+      console.error(err);
       setError("Failed to fetch users. Ensure you have Admin privileges.");
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, []);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const handleRoleChange = async (userId, newRole) => {
+  const handleRolesChange = async (userId, newRoles) => {
     try {
-      await api.put(`/admin/users/${userId}/role`, { role: newRole });
-      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, role: newRole } : u)));
+      const token = localStorage.getItem("edge_token");
+      await axios.put(`/api/admin/users/${userId}/roles`, { roles: newRoles }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, roles: newRoles } : u)));
     } catch (err) {
-      setError("Failed to update role.");
+      console.error(err);
+      setError("Failed to update roles.");
     }
   };
 
-  if (user?.role !== "admin") {
+  const handleApprove = async (userId) => {
+    try {
+      const token = localStorage.getItem("edge_token");
+      await axios.put(`/api/admin/users/${userId}/approve`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUsers(prev => prev.map(u => (u.id === userId ? { ...u, is_approved: true } : u)));
+    } catch (err) {
+      console.error(err);
+      setError("Failed to approve user.");
+    }
+  };
+
+  const handleDelete = async (userId) => {
+    if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+    try {
+      const token = localStorage.getItem("edge_token");
+      await axios.delete(`/api/admin/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUsers(prev => prev.filter(u => u.id !== userId));
+    } catch (err) {
+      console.error(err);
+      setError("Failed to delete user.");
+    }
+  };
+
+  if (!user?.roles?.includes("admin")) {
     return (
       <Box sx={{ p: 4, textAlign: "center", color: "#8fa3c0" }}>
         <Typography variant="h5">Access Denied: Administrators only.</Typography>
@@ -61,7 +97,8 @@ export default function Admin() {
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ color: "#e8edf5", fontWeight: "bold" }}>Email</TableCell>
-                  <TableCell sx={{ color: "#e8edf5", fontWeight: "bold" }}>Current Role</TableCell>
+                  <TableCell sx={{ color: "#e8edf5", fontWeight: "bold" }}>Current Roles</TableCell>
+                  <TableCell sx={{ color: "#e8edf5", fontWeight: "bold" }}>Status</TableCell>
                   <TableCell sx={{ color: "#e8edf5", fontWeight: "bold" }}>Action</TableCell>
                 </TableRow>
               </TableHead>
@@ -69,13 +106,17 @@ export default function Admin() {
                 {users.map((u) => (
                   <TableRow key={u.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
                     <TableCell sx={{ color: "#8fa3c0" }}>{u.email}</TableCell>
-                    <TableCell sx={{ color: "#8fa3c0", textTransform: "capitalize" }}>{u.role}</TableCell>
-                    <TableCell>
+                    <TableCell sx={{ color: "#8fa3c0", textTransform: "capitalize" }}>{u.roles?.join(', ')}</TableCell>
+                    <TableCell sx={{ color: u.is_approved ? "#4caf50" : "#ff9800", fontWeight: "bold" }}>
+                      {u.is_approved ? "Approved" : "Pending"}
+                    </TableCell>
+                    <TableCell sx={{display:"flex", gap: "8px"}}>
                       <Select
-                        value={u.role}
+                        multiple
+                        value={u.roles || []}
                         size="small"
-                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                        sx={{ color: "white", ".MuiOutlinedInput-notchedOutline": { borderColor: "#506280" } }}
+                        onChange={(e) => handleRolesChange(u.id, typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
+                        sx={{ color: "white", ".MuiOutlinedInput-notchedOutline": { borderColor: "#506280" }, minWidth: "120px" }}
                       >
                         {ROLES.map(r => (
                           <MenuItem key={r} value={r} sx={{ textTransform: "capitalize" }}>
@@ -83,6 +124,14 @@ export default function Admin() {
                           </MenuItem>
                         ))}
                       </Select>
+                      {!u.is_approved && (
+                        <Button variant="contained" size="small" onClick={() => handleApprove(u.id)} sx={{background:"#4caf50", "&:hover":{background:"#388e3c"}}}>
+                          Approve
+                        </Button>
+                      )}
+                      <Button variant="contained" size="small" onClick={() => handleDelete(u.id)} sx={{background:"#f44336", "&:hover":{background:"#d32f2f"}}}>
+                        Delete
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

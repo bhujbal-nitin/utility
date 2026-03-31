@@ -12,6 +12,15 @@ module.exports = function setupProxy(app) {
     })
   );
 
+  // Admin service (part of Auth)
+  app.use(
+    "/api/admin",
+    createProxyMiddleware({
+      target: targetFor("REACT_APP_AUTH_PROXY_TARGET", "http://localhost:8000"),
+      changeOrigin: true,
+    })
+  );
+
   // BRD Studio service
   app.use(
     "/api/brd",

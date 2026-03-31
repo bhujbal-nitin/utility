@@ -38,9 +38,11 @@ class RequireRole:
         self.allowed_roles = allowed_roles
 
     async def __call__(self, current_user: User = Depends(get_current_user)):
-        if current_user.role not in self.allowed_roles and current_user.role != RoleEnum.ADMIN:
+        allowed_values = [r.value for r in self.allowed_roles]
+        user_roles = current_user.roles if current_user.roles else []
+        if RoleEnum.ADMIN.value not in user_roles and not any(role in allowed_values for role in user_roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Operation not permitted. Required roles: {[r.value for r in self.allowed_roles]}"
+                detail=f"Operation not permitted. Required roles: {allowed_values}"
             )
         return current_user

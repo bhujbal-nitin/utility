@@ -38,6 +38,25 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 
+import { 
+  MDXEditor, 
+  headingsPlugin, 
+  listsPlugin, 
+  quotePlugin, 
+  thematicBreakPlugin, 
+  markdownShortcutPlugin,
+  tablePlugin,
+  toolbarPlugin,
+  UndoRedo,
+  BoldItalicUnderlineToggles,
+  BlockTypeSelect,
+  ListsToggle,
+  InsertTable,
+  CreateLink,
+  Separator
+} from '@mdxeditor/editor';
+import '@mdxeditor/editor/style.css';
+
 // Section mapping to match template numbering exactly
 const SECTION_CONFIG = [
   { key: "process_summary", label: "Section 1: Process Summary" },
@@ -58,6 +77,47 @@ const SECTION_CONFIG = [
 const SECTION_ORDER = SECTION_CONFIG.map(c => c.key);
 
 /**
+ * Robust image reference renderer for all Markdown node types
+ */
+const renderImageRefs = (text, captures, apiBase) => {
+  if (typeof text !== 'string' || !text.includes('[IMAGE_REF:')) return text;
+
+  const parts = text.split(/(\[IMAGE_REF:[^\]]+\])/g);
+  return parts.map((part, i) => {
+    const match = part.match(/\[IMAGE_REF:([^\]]+)\]/);
+    if (match) {
+      const capId = match[1];
+      const cap = captures.find(c => c.id === capId);
+      if (cap && (cap.image_url || cap.image_path)) {
+        // Fallback to relative URL if apiBase not present
+        const cleanApiBase = apiBase ? apiBase.replace(/\/$/, '') : '';
+        const src = `${cleanApiBase}${cap.image_url}`;
+        
+        return (
+          <Box key={i} sx={{ my: 2, textAlign: 'center', bgcolor: 'rgba(0,0,0,0.2)', p: 1, borderRadius: 1 }}>
+            <img 
+              src={src} 
+              alt={cap.label} 
+              style={{ maxWidth: '100%', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)', display: 'block', margin: '0 auto' }} 
+              onError={(e) => {
+                e.target.onerror = null;
+                // If absolute fails, try relative via proxy
+                if (src.startsWith('http')) e.target.src = cap.image_url;
+              }}
+            />
+            <Typography variant="caption" sx={{ display: 'block', color: '#8fa3c0', mt: 1, fontStyle: 'italic', fontWeight: 600 }}>
+              Figure: {cap.label || "Process Step Capture"}
+            </Typography>
+          </Box>
+        );
+      }
+      return <span key={i} style={{ color: '#F26522', fontWeight: 800 }}>[Screenshot: {capId} - Image data pending]</span>;
+    }
+    return part;
+  });
+};
+
+/**
  * Custom Markdown Components to handle AE specifics (Images, Tables, etc.)
  */
 const useMarkdownComponents = (captures, apiBase) => useMemo(() => ({
@@ -68,60 +128,31 @@ const useMarkdownComponents = (captures, apiBase) => useMemo(() => ({
       if (node?.props?.children) return flattenText(node.props.children);
       return '';
     };
-
     const fullText = flattenText(children);
-
-    if (fullText.includes('[IMAGE_REF:')) {
-      const parts = fullText.split(/(\[IMAGE_REF:[^\]]+\])/g);
-      return (
-        <Typography component="div" sx={{ mb: 2, lineHeight: 1.6, fontSize: '10.5pt' }}>
-          {parts.map((part, i) => {
-            const match = part.match(/\[IMAGE_REF:([^\]]+)\]/);
-            if (match) {
-              const capId = match[1];
-              const cap = captures.find(c => c.id === capId);
-              if (cap && cap.image_url) {
-                return (
-                  <Box key={i} sx={{ my: 2, textAlign: 'center' }}>
-                    <img 
-                      src={`${apiBase}${cap.image_url}`} 
-                      alt={cap.label} 
-                      style={{ maxWidth: '100%', borderRadius: '4px', border: '1px solid #ddd' }} 
-                    />
-                    <Typography variant="caption" sx={{ display: 'block', color: '#666', fontStyle: 'italic' }}>
-                      Figure: {cap.label || "Process Step Capture"}
-                    </Typography>
-                  </Box>
-                );
-              }
-              return <span key={i}>[Screenshot: {capId}]</span>;
-            }
-            return part;
-          })}
-        </Typography>
-      );
-    }
     return (
-      <Typography 
-        sx={{ 
-          mb: 2, 
-          lineHeight: 1.6, 
-          fontSize: '10.5pt',
-          color: '#333'
-        }}
-      >
-        {children}
+      <Typography sx={{ mb: 2, lineHeight: 1.6, fontSize: '10.5pt', color: '#e8edf5' }}>
+        {renderImageRefs(fullText, captures, apiBase)}
       </Typography>
     );
   },
+  li: ({ children }) => (
+    <li style={{ color: '#e8edf5', fontSize: '10.5pt', marginBottom: '8px' }}>
+      {typeof children === 'string' ? renderImageRefs(children, captures, apiBase) : children}
+    </li>
+  ),
+  h3: ({ children }) => (
+    <Typography variant="h6" sx={{ color: '#F26522', fontWeight: 700, mt: 3, mb: 1.5 }}>
+      {typeof children === 'string' ? renderImageRefs(children, captures, apiBase) : children}
+    </Typography>
+  ),
   table: ({ children }) => (
-    <Box sx={{ overflowX: 'auto', my: 2, border: '1px solid #e2e8f0', borderRadius: 1, maxWidth: '100%' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', color: '#333', fontSize: '9.5pt', tableLayout: 'fixed' }}>{children}</table>
+    <Box sx={{ overflowX: 'auto', my: 2, border: '1px solid rgba(255,255,255,0.1)', borderRadius: 1, maxWidth: '100%' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', color: '#e8edf5', fontSize: '9.5pt', tableLayout: 'fixed' }}>{children}</table>
     </Box>
   ),
   thead: ({ children }) => <thead style={{ backgroundColor: '#1F3864', color: '#fff' }}>{children}</thead>,
-  th: ({ children }) => <th style={{ padding: '8px 10px', border: '1px solid #e2e8f0', textAlign: 'left', fontWeight: 600, wordBreak: 'break-word', overflow: 'hidden' }}>{children}</th>,
-  td: ({ children }) => <td style={{ padding: '8px 10px', border: '1px solid #e2e8f0', color: '#444', wordBreak: 'break-word', verticalAlign: 'top', overflow: 'hidden' }}>{children}</td>,
+  th: ({ children }) => <th style={{ padding: '8px 10px', border: '1px solid rgba(255,255,255,0.1)', textAlign: 'left', fontWeight: 600, wordBreak: 'break-word', overflow: 'hidden' }}>{children}</th>,
+  td: ({ children }) => <td style={{ padding: '8px 10px', border: '1px solid rgba(255,255,255,0.1)', color: '#8fa3c0', wordBreak: 'break-word', verticalAlign: 'top', overflow: 'hidden' }}>{children}</td>,
   pre: ({ children }) => {
     // Unwrap <pre><code className="language-mermaid">...</code></pre> so the
     // Mermaid code component renders as a block-level element directly.
@@ -234,20 +265,51 @@ const SectionBlock = ({ section, index, apiBase, token, onRefine, onHistory, cap
       </Box>
 
       {isEditing ? (
-        <TextField
-          multiline
-          fullWidth
-          autoFocus
-          value={localContent}
-          onChange={(e) => setLocalContent(e.target.value)}
-          onBlur={stopEdit}
-          variant="standard"
-          placeholder="Type here to update section..."
-          InputProps={{
-            disableUnderline: true,
-            sx: { fontFamily: "'Segoe UI', sans-serif", fontSize: "10.5pt", lineHeight: 1.6, color: "#333", p: 2, bgcolor: '#fff9f5', borderRadius: 1 }
-          }}
-        />
+        <Box sx={{ 
+          bgcolor: '#0b1322', 
+          borderRadius: 1, 
+          color: '#e8edf5', 
+          border: '1px solid rgba(255,255,255,0.1)', 
+          overflow: 'hidden',
+          '& .mdxeditor': { color: '#e8edf5 !important' },
+          '& .mdxeditor-root-contenteditable': { color: '#e8edf5 !important' },
+          '& .mdxeditor-toolbar': { bgcolor: '#112240', borderBottom: '1px solid rgba(255,255,255,0.1)' },
+          '& .mdxeditor-toolbar button': { color: '#8fa3c0' },
+          '& .mdxeditor-toolbar button[data-active="true"]': { color: '#F26522', bgcolor: 'rgba(242,101,34,0.1)' }
+        }}>
+          <MDXEditor
+            markdown={localContent}
+            onChange={setLocalContent}
+            autoFocus
+            contentEditableClassName="prose max-w-none"
+            plugins={[
+              headingsPlugin(),
+              listsPlugin(),
+              quotePlugin(),
+              thematicBreakPlugin(),
+              tablePlugin(),
+              markdownShortcutPlugin(),
+              toolbarPlugin({
+                toolbarContents: () => (
+                  <>
+                    <UndoRedo />
+                    <Separator />
+                    <BoldItalicUnderlineToggles />
+                    <Separator />
+                    <BlockTypeSelect />
+                    <ListsToggle />
+                    <Separator />
+                    <InsertTable />
+                    <CreateLink />
+                  </>
+                )
+              })
+            ]}
+          />
+          <Box sx={{ p: 1, textAlign: 'right', bgcolor: '#112240', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <Button size="small" onClick={stopEdit} sx={{ color: "#F26522", fontWeight: 700 }}>Done</Button>
+          </Box>
+        </Box>
       ) : (
         <Box onClick={toggleEdit} sx={{ cursor: "text", minHeight: "2em", px: 0.5, maxWidth: '100%', overflowWrap: 'break-word', wordBreak: 'break-word', '& img': { maxWidth: '100%', height: 'auto' } }}>
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
@@ -255,7 +317,7 @@ const SectionBlock = ({ section, index, apiBase, token, onRefine, onHistory, cap
           </ReactMarkdown>
         </Box>
       )}
-      <Divider sx={{ mt: 4, opacity: 0.3 }} />
+      <Divider sx={{ mt: 4, opacity: 0.1 }} />
     </Box>
   );
 }

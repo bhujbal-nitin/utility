@@ -6,13 +6,14 @@ from typing import Optional
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
-    role: Optional[RoleEnum] = RoleEnum.BA
+    roles: Optional[list[RoleEnum]] = [RoleEnum.BA]
 
 class UserResponse(BaseModel):
     id: str
     email: str
-    role: RoleEnum
+    roles: list[RoleEnum]
     is_active: bool
+    is_approved: bool
 
     class Config:
         from_attributes = True
