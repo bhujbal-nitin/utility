@@ -4,7 +4,7 @@ import Sidebar from "../components/Sidebar";
 import AIStudio from "../pages/AIStudio";
 import MigrationAssistant from "../pages/MigrationAssistant";
 import BRDStudio from "../pages/BRDStudio";
-import ProposalAssistant from "../pages/ProposalAssistant";
+import ProposalStudio from "../pages/ProposalStudio";
 import WelcomeScreen from "../components/WelcomeScreen";
 import { useAuth } from "../context/AuthContext";
 import { Navigate } from "react-router-dom";
@@ -28,7 +28,7 @@ export default function DashboardLayout() {
       case "brd":
         return <BRDStudio onBack={() => setActiveTool(null)} />;
       case "proposal":
-        return <ProposalAssistant onBack={() => setActiveTool(null)} />;
+        return <ProposalStudio onBack={() => setActiveTool(null)} />;
       case "migration":
         return <MigrationAssistant tool={activeTool} onBack={() => setActiveTool(null)} />;
       case "ai-studio":

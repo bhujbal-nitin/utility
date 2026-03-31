@@ -147,6 +147,10 @@ class ExportService:
                     if target_id in f:
                         return os.path.abspath(os.path.join(root, f))
 
+        # 4. Final fallback check: is the capture_id actually just the filename?
+        if os.path.isfile(os.path.join(self.frames_dir, target_id)):
+            return os.path.abspath(os.path.join(self.frames_dir, target_id))
+
         logger.warning(f"Could not resolve image for capture {capture_id}")
         return None
 
@@ -471,20 +475,21 @@ class ExportService:
                 continue
 
             # 2. [IMAGE_REF] Resolution (handles mid-line or multiple)
-            if "[IMAGE_REF:" in line:
-                # Split line by [IMAGE_REF:id]
-                parts = re.split(r"(\[IMAGE_REF:[^\]]+\])", line)
+            if "[IMAGE_REF" in line:
+                # Support variant: [IMAGE_REF:id] or [IMAGE_REF: id]
+                parts = re.split(r"(\[IMAGE_REF:?\s*[^\]\s]+\])", line)
                 for part in parts:
-                    img_match = re.search(r"\[IMAGE_REF:([^\]]+)\]", part)
+                    img_match = re.search(r"\[IMAGE_REF:?\s*([^\]\s]+)\]", part)
                     if img_match:
-                        cap_id = img_match.group(1)
+                        cap_id = img_match.group(1).strip()
                         img_path = self._find_capture_image(cap_id, captures)
                         if img_path and os.path.exists(img_path) and os.path.getsize(img_path) > 0:
                             try:
                                 img_buf = self._normalize_image_for_docx(img_path)
                                 new_p = doc.add_paragraph()
                                 new_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                                new_p.add_run().add_picture(img_buf, width=Inches(5.0))
+                                # Standardize to 6.0" width for professional boardroom reports
+                                new_p.add_run().add_picture(img_buf, width=Inches(6.0))
                                 insertion_point.addnext(new_p._p)
                                 insertion_point = new_p._p
                                 
@@ -762,19 +767,19 @@ class ExportService:
             line = lines[i]
 
             # Handle [IMAGE_REF:capture_id] (mid-line or multiple)
-            if "[IMAGE_REF:" in line:
-                parts = re.split(r"(\[IMAGE_REF:[^\]]+\])", line)
+            if "[IMAGE_REF" in line:
+                parts = re.split(r"(\[IMAGE_REF:?\s*[^\]\s]+\])", line)
                 for part in parts:
-                    image_match = re.search(r"\[IMAGE_REF:([^\]]+)\]", part)
+                    image_match = re.search(r"\[IMAGE_REF:?\s*([^\]\s]+)\]", part)
                     if image_match:
-                        cap_id = image_match.group(1)
+                        cap_id = image_match.group(1).strip()
                         img_path = self._find_capture_image(cap_id, captures)
                         if img_path:
                             try:
                                 img_buf = self._normalize_image_for_docx(img_path)
                                 p = doc.add_paragraph()
                                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                                p.add_run().add_picture(img_buf, width=Inches(5.5))
+                                p.add_run().add_picture(img_buf, width=Inches(6.0))
                                 cap = next((c for c in captures if c.get("id") == cap_id), None)
                                 if cap:
                                     cap_p = doc.add_paragraph()

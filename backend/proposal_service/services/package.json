@@ -1,0 +1,9 @@
+{
+  "name": "ae-proposal-generator",
+  "version": "1.0.0",
+  "description": "AutomationEdge proposal docx generator",
+  "main": "generate_proposal.js",
+  "dependencies": {
+    "docx": "^9.6.1"
+  }
+}

@@ -3,10 +3,10 @@ volume_converter.py
 -------------------
 Converts a free-text volume string (e.g. "600 Per Month", "1000 per day",
 "Weekly 500 cases") into an integer *daily* volume.
-Ported from AE Scope Portal.
 """
 
 import re
+
 
 # Divisors relative to a 30-day month / 365-day year
 _PERIOD_MAP = {
@@ -24,7 +24,8 @@ _PERIOD_MAP = {
     "annually":  365,
 }
 
-def _extract_first_number(text: str) -> float:
+
+def _extract_first_number(text: str) -> float | None:
     """Return the first numeric value (int or float) found in text."""
     # Handle ranges like "300-400" → take midpoint
     range_match = re.search(r"(\d[\d,]*)\s*[-–]\s*(\d[\d,]*)", text)
@@ -35,17 +36,12 @@ def _extract_first_number(text: str) -> float:
 
     single = re.search(r"(\d[\d,.]*[kK]?)", text)
     if not single:
-        return 0.0
+        return None
     raw = single.group(1)
     if raw.lower().endswith("k"):
-        try:
-            return float(raw[:-1].replace(",", "")) * 1000
-        except ValueError:
-            return 0.0
-    try:
-        return float(raw.replace(",", ""))
-    except ValueError:
-        return 0.0
+        return float(raw[:-1].replace(",", "")) * 1000
+    return float(raw.replace(",", ""))
+
 
 def _detect_period(text: str) -> int:
     """
@@ -60,18 +56,28 @@ def _detect_period(text: str) -> int:
     # fallback: monthly
     return 30
 
+
 def to_daily(raw: str) -> int:
     """
     Convert a raw volume string to an integer daily volume.
+
+    Examples
+    --------
+    "600 Per Month"          → 20
+    "1000 per day"           → 1000
+    "Weekly 500 cases"       → 72  (≈500/7)
+    "20000 Per Month"        → 667
+    "300-400 cases per month"→ 12  (≈350/30)
+    "1000 per day\\nFor ..."  → 1000  (takes first number + first period)
     """
     if not raw:
         return 0
 
     # Only look at the first line if multi-line
-    first_line = str(raw).split("\n")[0].strip()
+    first_line = raw.split("\n")[0].strip()
 
     number = _extract_first_number(first_line)
-    if number == 0.0:
+    if number is None:
         return 0
 
     divisor = _detect_period(first_line)

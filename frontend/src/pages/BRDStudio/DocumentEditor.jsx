@@ -80,38 +80,79 @@ const SECTION_ORDER = SECTION_CONFIG.map(c => c.key);
  * Robust image reference renderer for all Markdown node types
  */
 const renderImageRefs = (text, captures, apiBase) => {
-  if (typeof text !== 'string' || !text.includes('[IMAGE_REF:')) return text;
+  if (typeof text !== 'string' || !text.includes('[IMAGE_REF')) return text;
 
-  const parts = text.split(/(\[IMAGE_REF:[^\]]+\])/g);
+  // Supports [IMAGE_REF:id], [IMAGE_REF: id], or [IMAGE_REF id]
+  const parts = text.split(/(\[IMAGE_REF:?\s*[^\]\s]+\])/g);
+  
   return parts.map((part, i) => {
-    const match = part.match(/\[IMAGE_REF:([^\]]+)\]/);
+    const match = part.match(/\[IMAGE_REF:?\s*([^\]\s]+)\]/);
     if (match) {
-      const capId = match[1];
+      const capId = match[1].trim();
       const cap = captures.find(c => c.id === capId);
+      
       if (cap && (cap.image_url || cap.image_path)) {
-        // Fallback to relative URL if apiBase not present
         const cleanApiBase = apiBase ? apiBase.replace(/\/$/, '') : '';
         const src = `${cleanApiBase}${cap.image_url}`;
         
         return (
-          <Box key={i} sx={{ my: 2, textAlign: 'center', bgcolor: 'rgba(0,0,0,0.2)', p: 1, borderRadius: 1 }}>
+          <Box 
+            key={i} 
+            sx={{ 
+              my: 4, 
+              mx: 'auto', 
+              textAlign: 'center', 
+              maxWidth: '850px', // Standard width for document view
+              width: '100%',
+              bgcolor: 'rgba(0,0,0,0.15)', 
+              p: 2, 
+              borderRadius: 2,
+              border: '1px solid rgba(255,255,255,0.05)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+            }}
+          >
             <img 
               src={src} 
-              alt={cap.label} 
-              style={{ maxWidth: '100%', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)', display: 'block', margin: '0 auto' }} 
+              alt={cap.label || "Process Capture"} 
+              style={{ 
+                maxWidth: '100%', 
+                height: 'auto', 
+                borderRadius: '6px', 
+                border: '1px solid rgba(255,255,255,0.1)', 
+                display: 'block', 
+                margin: '0 auto',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+              }} 
               onError={(e) => {
                 e.target.onerror = null;
-                // If absolute fails, try relative via proxy
-                if (src.startsWith('http')) e.target.src = cap.image_url;
+                // If absolute fails, try relative
+                if (src.includes('http')) e.target.src = cap.image_url;
               }}
             />
-            <Typography variant="caption" sx={{ display: 'block', color: '#8fa3c0', mt: 1, fontStyle: 'italic', fontWeight: 600 }}>
-              Figure: {cap.label || "Process Step Capture"}
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                display: 'block', 
+                color: '#8fa3c0', 
+                mt: 1.5, 
+                fontStyle: 'italic', 
+                fontWeight: 600,
+                fontSize: '0.75rem',
+                letterSpacing: '0.02em'
+              }}
+            >
+              Step: {cap.label || "System Screenshot"}
             </Typography>
           </Box>
         );
       }
-      return <span key={i} style={{ color: '#F26522', fontWeight: 800 }}>[Screenshot: {capId} - Image data pending]</span>;
+      return (
+        <Box key={i} sx={{ my: 1, p: 1, bgcolor: 'rgba(242,101,34,0.1)', borderRadius: 1, border: '1px dashed #F26522', textAlign: 'center' }}>
+          <Typography variant="caption" sx={{ color: '#F26522', fontWeight: 800 }}>
+            [Screenshot Reference: {capId} - Asset syncing or missing]
+          </Typography>
+        </Box>
+      );
     }
     return part;
   });

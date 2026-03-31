@@ -34,7 +34,7 @@ const DATA = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
 const {
   client_name, proposal_date, contact_name, contact_title,
   contact_address, contact_email, contact_mobile,
-  use_cases, software, hardware, client_image
+  use_cases, software, hardware,
 } = DATA;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ const DXA_CONTENT = DXA_PAGE - 2 * DXA_MARGIN; // 10080
 const C_DARK_BLUE  = '1F3864';
 const C_MID_BLUE   = '2E75B6';
 const C_LIGHT_BLUE = 'BDD7EE';
-const C_ORANGE     = 'E46C0A';
+const C_ORANGE     = 'FFC000';
 const C_WHITE      = 'FFFFFF';
 const C_LIGHT_GRAY = 'F2F2F2';
 const C_GREEN_LIGHT = 'E2EFDA';
@@ -64,19 +64,33 @@ const NO_BORDERS = () => {
   return { top: b, bottom: b, left: b, right: b };
 };
 
-function img(name, widthIn, heightIn) {
-  const p = path.join(imagesDir, name);
-  if (!fs.existsSync(p)) return null;
-  const data = fs.readFileSync(p);
+// imgPx: create an inline ImageRun using pixel dimensions (no floating)
+function imgPx(name, widthPx, heightPx) {
+  const full = path.join(imagesDir, name);
+  if (!fs.existsSync(full)) return null;
+  const data = fs.readFileSync(full);
   const ext  = path.extname(name).slice(1).toLowerCase();
   const typeMap = { png: 'png', jpg: 'jpg', jpeg: 'jpg' };
   return new ImageRun({
     data,
-    transformation: {
-      width:  Math.round(widthIn  * 96),
-      height: Math.round(heightIn * 96),
-    },
+    transformation: { width: widthPx, height: heightPx },
     type: typeMap[ext] || 'png',
+  });
+}
+
+// imgIn: helper using inch-based dimensions (converts to px at 96 dpi)
+function img(name, widthIn, heightIn) {
+  return imgPx(name, Math.round(widthIn * 96), Math.round(heightIn * 96));
+}
+
+// imgPara: wrap an ImageRun in a centred paragraph (the correct way to align images)
+function imgPara(name, widthPx, heightPx, extraSpacing = 0) {
+  const run = imgPx(name, widthPx, heightPx);
+  if (!run) return null;
+  return new Paragraph({
+    alignment: AlignmentType.CENTER,
+    spacing: extraSpacing ? { after: extraSpacing } : undefined,
+    children: [run],
   });
 }
 
@@ -98,8 +112,8 @@ function hdrCell(text, widthDxa, colspan=1) {
   return new TableCell({
     columnSpan: colspan,
     width: { size: widthDxa, type: WidthType.DXA },
-    borders: ALL_BORDERS(C_WHITE, 4),
-    shading: { fill: C_ORANGE, type: ShadingType.CLEAR },
+    borders: ALL_BORDERS(C_MID_BLUE, 8),
+    shading: { fill: C_DARK_BLUE, type: ShadingType.CLEAR },
     margins: { top: 80, bottom: 80, left: 120, right: 120 },
     verticalAlign: VerticalAlign.CENTER,
     children: [p([bold(text, 18, C_WHITE)], { alignment: AlignmentType.CENTER })],
@@ -139,16 +153,16 @@ function numberedPara(text, ref='numbers') {
 function sectionHeading(text) {
   return new Paragraph({
     heading: HeadingLevel.HEADING_1,
-    children: [new TextRun({ text, bold: true, size: 28, font: 'Arial', color: C_ORANGE })],
+    children: [new TextRun({ text, bold: true, size: 28, font: 'Arial', color: C_DARK_BLUE })],
     spacing: { before: 200, after: 120 },
-    border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: C_ORANGE, space: 1 } },
+    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: C_MID_BLUE, space: 1 } },
   });
 }
 
 function subHeading(text) {
   return new Paragraph({
     heading: HeadingLevel.HEADING_2,
-    children: [new TextRun({ text, bold: true, size: 24, font: 'Arial', color: C_ORANGE, underline: { type: UnderlineType.SINGLE, color: C_ORANGE } })],
+    children: [new TextRun({ text, bold: true, size: 24, font: 'Arial', color: C_MID_BLUE })],
     spacing: { before: 160, after: 80 },
   });
 }
@@ -289,7 +303,7 @@ function buildSoftwareTable() {
         width: { size: COL[3], type: WidthType.DXA },
         borders: ALL_BORDERS('CCCCCC', 4),
         shading: { fill: C_WHITE, type: ShadingType.CLEAR },
-        margins: { top: 80, bottom: 80, left: 120, right: 120 },
+        margins: { top: 80, bottom: 120, left: 120, right: 120 },
         children: [
           bulletPara(`AutomationEdge RPA ${numBots} Nos. Unassisted BOT`),
           bulletPara(`Agentic AI Plugins (LLM connector + Classifier + Summarizer + RAG + AI Master Conductor): ${numPlugins} Nos`),
@@ -327,13 +341,23 @@ function buildSoftwareTable() {
 // ── Hardware Table builder ─────────────────────────────────────────────────────
 function buildHardwareSection() {
   const hw = hardware || {};
-  const prod    = hw.production    || {};
-  const uat     = hw.uat           || {};
-  const dev     = hw.development   || {};
+  const prod = hw.production || {};
+  const uat  = hw.uat        || {};
+  const dev  = hw.development || {};
 
-  const COL = [900, 3000, 700, 600, 600, 700, 700, 1500, 900, 780]; // ~10380 -> trim a bit
-  const COL2 = [900, 3000, 700, 600, 600, 700, 700, 1500, 900, 680]; // ~10280
-  const hdrs = ['No. of Servers (Qty)', 'Applications / Module', 'Server', 'vCPU', 'Core', 'RAM (GB)', 'HD (GB)', 'Operating System', 'DB', 'Web Server'];
+  // Processing server specs – calculated in excel_generator and passed via hardware JSON
+  const ps       = hw.processing_server || {};
+  const psRam    = ps.ram  || 128;   // fallback: 18 bots * 4 = 72 → standard slab 128
+  const psCore   = ps.core || 22;    // fallback: 128 / 6 = 21.3 → next slab 24
+  // Application server: standard 1 CPU, 4 Core, 24 GB RAM (editable)
+  const appCpu   = ps.app_cpu  || 1;
+  const appCore  = ps.app_core || 4;
+  const appRam   = ps.app_ram  || 24;
+
+  const COL  = [900, 3000, 700, 600, 600, 700, 700, 1500, 900, 780];
+  const hdrs = ['No. of Servers (Qty)', 'Applications / Module', 'Server',
+                'vCPU', 'Core', 'RAM (GB)', 'HD (GB)',
+                'Operating System', 'DB', 'Web Server'];
 
   function hwRow(data, cols) {
     return new TableRow({
@@ -354,27 +378,40 @@ function buildHardwareSection() {
     });
   }
 
-  const headerRow = (cols) => new TableRow({ children: hdrs.map((h, i) => hdrCell(h, cols[i])) });
+  const headerRow = () => new TableRow({ children: hdrs.map((h, i) => hdrCell(h, COL[i])) });
 
-  // Production
-  const prodRows = (prod.servers || [[
-    2, 'AutomationEdge Main Server & including Active MQ, PostgreSQL DB, DocEdge Application Server, and Repair Station',
-    'VM', 2, 6, 36, 500, 'MS Windows Server 2022/2023 - 64 bit', 'PostgreSQL (Default)', 'Apache Tomcat'
-  ], [
-    2, 'Robot Processing Server including IDP Processing Agents',
-    'VM', 8, 12, 64, 500, 'MS Windows Server 2022/2023 - 64 bit (10 User Sessions)', '-', '-'
-  ]]).map(r => hwRow(r, COL));
+  // Production – 2 rows: Application Server + Processing Server
+  const prodRows = prod.servers
+    ? prod.servers.map(r => hwRow(r, COL))
+    : [
+        hwRow([
+          1,
+          'AutomationEdge Application Server (Main Server incl. Active MQ, PostgreSQL DB, DocEdge Application Server)',
+          'VM', appCpu, appCore, appRam, 500,
+          'MS Windows Server 2022/2023 – 64 bit', 'PostgreSQL (Default)', 'Apache Tomcat',
+        ], COL),
+        hwRow([
+          1,
+          'AutomationEdge Processing Server (incl. IDP Processing Agents & Robot Sessions)',
+          'VM', 1, psCore, psRam, 500,
+          'MS Windows Server 2022/2023 – 64 bit (10 User Sessions)', '-', '-',
+        ], COL),
+      ];
 
   // UAT
   const uatRows = (uat.servers || [[
-    1, 'AutomationEdge Main Server, Active MQ, PostgreSQL DB & Processing Server, DocEdge Application Server, Processing Server and Repair Station',
-    'VM', 1, 4, 24, 500, 'MS Windows Server 2022/2023 - 64 bit (6 User Sessions)', 'PostgreSQL (Default)', 'Apache Tomcat'
+    1,
+    'AutomationEdge Main Server, Active MQ, PostgreSQL DB & Processing Server, DocEdge Application Server and Repair Station',
+    'VM', 1, 4, 24, 500,
+    'MS Windows Server 2022/2023 – 64 bit (6 User Sessions)', 'PostgreSQL (Default)', 'Apache Tomcat',
   ]]).map(r => hwRow(r, COL));
 
   // Dev
   const devRows = (dev.servers || [[
-    4, 'Desktop Development Machine for Chatbot / Script Development',
-    'Desktop / VM with Remote Access', 1, 4, 8, 500, 'Windows 7 Professional – 64 bit', 'PostgreSQL (Default)', 'NA'
+    4,
+    'Desktop Development Machine for Chatbot / Script Development',
+    'Desktop / VM with Remote Access', 1, 4, 8, 500,
+    'Windows 7 Professional – 64 bit', 'PostgreSQL (Default)', 'NA',
   ]]).map(r => hwRow(r, COL));
 
   return new Table({
@@ -382,13 +419,13 @@ function buildHardwareSection() {
     columnWidths: COL,
     rows: [
       sectionTitle('Production Environment (On premises / VMs)'),
-      headerRow(COL),
+      headerRow(),
       ...prodRows,
       sectionTitle('UAT Environment (On premises / VMs)'),
-      headerRow(COL),
+      headerRow(),
       ...uatRows,
       sectionTitle('Development Environment (Offshore Desktop Systems)'),
-      headerRow(COL),
+      headerRow(),
       ...devRows,
     ],
     layout: TableLayoutType.FIXED,
@@ -430,29 +467,88 @@ function buildContactTable() {
 function buildPricingTables() {
   const elems = [];
 
-  // 5.1 Software Cost
-  const sw_col = [400, 5200, 1700, 2780]; // 10080
+  // Pricing data – unit prices are fixed; quantities come from software sizing or are user-validated
+  const sw = software || {};
+  const numBots    = sw.num_bots    || 18;
+  const idpPages   = sw.idp_pages   || '31,00,000';
+  const numPlugins = sw.num_plugins || 9;
+  const psEfforts  = sw.ps_efforts_total || 'As per scope';
+
+  // Validation note
+  elems.push(
+    p([
+      new TextRun({ text: '⚠ Validation Required: ', bold: true, size: 18, font: 'Arial', color: 'C00000' }),
+      run('Please review and confirm the quantity (No. of Units) in the tables below before finalisation. Unit prices are fixed — only quantities need your validation.', 18, 'C00000'),
+    ]),
+    sp(80),
+  );
+
+  // ── 5.1 Software Cost ────────────────────────────────────────────────────────
+  // Columns: No. | Line Item | Qty (validate) | Unit Price (INR) | Total Cost (INR)
+  const sw_col = [400, 3800, 1400, 1900, 2580]; // 10080
+  const swHdrs = ['No.', 'Annual Subscription Based License Line Item',
+                  'No. of Units\n(Validate)', 'Unit Price / Year (INR)', 'Total Cost (INR)'];
+
+  // Helper: highlighted quantity cell (user validates these)
+  function qtyCell(value, width) {
+    return new TableCell({
+      width: { size: width, type: WidthType.DXA },
+      borders: ALL_BORDERS('CCCCCC', 4),
+      shading: { fill: 'FFF2CC', type: ShadingType.CLEAR },  // light yellow = needs validation
+      margins: { top: 80, bottom: 80, left: 120, right: 120 },
+      verticalAlign: VerticalAlign.CENTER,
+      children: [p([bold(String(value), 18)], { alignment: AlignmentType.CENTER })],
+    });
+  }
+
   elems.push(
     subHeading('5.1 AutomationEdge Software Cost'),
     new Table({
       width: { size: DXA_CONTENT, type: WidthType.DXA },
       columnWidths: sw_col,
       rows: [
-        new TableRow({ children: ['No.', 'Annual Subscription Based License Line Item', 'No. of Units', 'Total Cost (INR)'].map((h, i) => hdrCell(h, sw_col[i])) }),
-        new TableRow({ children: [dataCell('1', sw_col[0]), dataCell('AutomationEdge RPA Advanced Unassisted Bot', sw_col[1]), dataCell('As per sizing', sw_col[2]), dataCell('', sw_col[3])] }),
-        new TableRow({ children: [dataCell('2', sw_col[0]), dataCell('DocEdge (IDP) – Per-page Processing', sw_col[1]), dataCell('As per volume', sw_col[2]), dataCell('', sw_col[3])] }),
-        new TableRow({ children: [dataCell('3', sw_col[0]), dataCell('Agentic AI Plugins (LLM connector + Classifier + Summariser + RAG + AI Master Conductor)', sw_col[1]), dataCell('As per scope', sw_col[2]), dataCell('', sw_col[3])] }),
+        new TableRow({ children: swHdrs.map((h, i) => hdrCell(h, sw_col[i])) }),
         new TableRow({ children: [
-          new TableCell({ columnSpan: 3, width: { size: sw_col[0]+sw_col[1]+sw_col[2], type: WidthType.DXA }, borders: ALL_BORDERS('CCCCCC', 4), shading: { fill: C_ORANGE, type: ShadingType.CLEAR }, margins: { top: 80, bottom: 80, left: 120, right: 120 }, children: [p([bold('Total', 18)])] }),
-          dataCell('To be shared', sw_col[3], { bold: true, fill: C_ORANGE }),
-        ] }),
+          dataCell('1', sw_col[0]),
+          dataCell('AutomationEdge RPA Advanced Unassisted Bot', sw_col[1]),
+          qtyCell(numBots, sw_col[2]),
+          dataCell('2,50,000', sw_col[3], { align: AlignmentType.CENTER }),
+          dataCell('', sw_col[4]),
+        ]}),
+        new TableRow({ children: [
+          dataCell('2', sw_col[0]),
+          dataCell('DocEdge (IDP) – Per-page Processing', sw_col[1]),
+          qtyCell(idpPages, sw_col[2]),
+          dataCell('2', sw_col[3], { align: AlignmentType.CENTER }),
+          dataCell('', sw_col[4]),
+        ]}),
+        new TableRow({ children: [
+          dataCell('3', sw_col[0]),
+          dataCell('Agentic AI Plugins (LLM connector + Classifier + Summariser + RAG + AI Master Conductor)', sw_col[1]),
+          qtyCell(numPlugins, sw_col[2]),
+          dataCell('3,00,000', sw_col[3], { align: AlignmentType.CENTER }),
+          dataCell('', sw_col[4]),
+        ]}),
+        new TableRow({ children: [
+          new TableCell({
+            columnSpan: 4,
+            width: { size: sw_col[0]+sw_col[1]+sw_col[2]+sw_col[3], type: WidthType.DXA },
+            borders: ALL_BORDERS('CCCCCC', 4),
+            shading: { fill: C_ORANGE, type: ShadingType.CLEAR },
+            margins: { top: 80, bottom: 80, left: 120, right: 120 },
+            children: [p([bold('Total', 18)])],
+          }),
+          dataCell('To be confirmed', sw_col[4], { bold: true, fill: C_ORANGE }),
+        ]}),
       ],
       layout: TableLayoutType.FIXED,
     }),
+    sp(60),
+    p([run('* Yellow cells require quantity validation. Unit prices are fixed as per the standard price list.', 16, '595959')]),
     sp(100),
   );
 
-  // 5.2 AI Services
+  // ── 5.2 AI Services ──────────────────────────────────────────────────────────
   const ai_col = [400, 7000, 2680];
   elems.push(
     subHeading('5.2 AI Services Costing'),
@@ -461,34 +557,55 @@ function buildPricingTables() {
       columnWidths: ai_col,
       rows: [
         new TableRow({ children: ['No.', 'Description', 'Cost (INR)'].map((h, i) => hdrCell(h, ai_col[i])) }),
-        new TableRow({ children: [dataCell('1', ai_col[0]), dataCell('Gen AI Services Subscription (Cloud / On-prem LLM)', ai_col[1]), dataCell('To be decided', ai_col[2])] }),
+        new TableRow({ children: [
+          dataCell('1', ai_col[0]),
+          dataCell('Gen AI Services Subscription (Cloud / On-prem LLM)', ai_col[1]),
+          dataCell('To be decided mutually', ai_col[2]),
+        ]}),
       ],
       layout: TableLayoutType.FIXED,
     }),
     sp(100),
   );
 
-  // 5.3 Professional Services
-  const ps_col = [400, 5200, 1700, 2780];
+  // ── 5.3 Professional Services ────────────────────────────────────────────────
+  // Columns: No. | Description | Effort (Days) – validate | Unit Rate (INR/day) | Total Cost
+  const ps_col = [400, 3800, 1400, 1900, 2580];
+  const psHdrs = ['No.', 'Description', 'Effort (Days)\n(Validate)', 'Rate / Day (INR)', 'Total Cost (INR)'];
   elems.push(
     subHeading('5.3 Professional Service Costing'),
     new Table({
       width: { size: DXA_CONTENT, type: WidthType.DXA },
       columnWidths: ps_col,
       rows: [
-        new TableRow({ children: ['No.', 'Description', 'Effort (Days)', 'Cost (INR)'].map((h, i) => hdrCell(h, ps_col[i])) }),
-        new TableRow({ children: [dataCell('1', ps_col[0]), dataCell('Implementation – Professional Services', ps_col[1]), dataCell('As per scope', ps_col[2]), dataCell('', ps_col[3])] }),
+        new TableRow({ children: psHdrs.map((h, i) => hdrCell(h, ps_col[i])) }),
         new TableRow({ children: [
-          new TableCell({ columnSpan: 3, width: { size: ps_col[0]+ps_col[1]+ps_col[2], type: WidthType.DXA }, borders: ALL_BORDERS('CCCCCC', 4), shading: { fill: C_ORANGE, type: ShadingType.CLEAR }, margins: { top: 80, bottom: 80, left: 120, right: 120 }, children: [p([bold('Total', 18)])] }),
-          dataCell('To be shared', ps_col[3], { bold: true, fill: C_ORANGE }),
-        ] }),
+          dataCell('1', ps_col[0]),
+          dataCell('Implementation – Professional Services', ps_col[1]),
+          qtyCell(String(psEfforts), ps_col[2]),
+          dataCell('As agreed', ps_col[3], { align: AlignmentType.CENTER }),
+          dataCell('', ps_col[4]),
+        ]}),
+        new TableRow({ children: [
+          new TableCell({
+            columnSpan: 4,
+            width: { size: ps_col[0]+ps_col[1]+ps_col[2]+ps_col[3], type: WidthType.DXA },
+            borders: ALL_BORDERS('CCCCCC', 4),
+            shading: { fill: C_ORANGE, type: ShadingType.CLEAR },
+            margins: { top: 80, bottom: 80, left: 120, right: 120 },
+            children: [p([bold('Total', 18)])],
+          }),
+          dataCell('To be confirmed', ps_col[4], { bold: true, fill: C_ORANGE }),
+        ]}),
       ],
       layout: TableLayoutType.FIXED,
     }),
+    sp(60),
+    p([run('* Effort days are derived from the Complexity Grid. Please validate before finalising.', 16, '595959')]),
     sp(100),
   );
 
-  // 5.4 Training
+  // ── 5.4 Training ─────────────────────────────────────────────────────────────
   const tr_col = [400, 5200, 4480];
   elems.push(
     subHeading('5.4 Training'),
@@ -497,14 +614,18 @@ function buildPricingTables() {
       columnWidths: tr_col,
       rows: [
         new TableRow({ children: ['No.', 'Description', 'Details'].map((h, i) => hdrCell(h, tr_col[i])) }),
-        new TableRow({ children: [dataCell('1', tr_col[0]), dataCell('Train the Trainer – AutomationEdge Platform', tr_col[1]), dataCell('3 working days, 2 hours/day (web-based)', tr_col[2])] }),
+        new TableRow({ children: [
+          dataCell('1', tr_col[0]),
+          dataCell('Train the Trainer – AutomationEdge Platform', tr_col[1]),
+          dataCell('3 working days, 2 hours/day (web-based)', tr_col[2]),
+        ]}),
       ],
       layout: TableLayoutType.FIXED,
     }),
     sp(100),
   );
 
-  // 5.5 Payment Schedule
+  // ── 5.5 Payment Schedule ─────────────────────────────────────────────────────
   const pay_col = [400, 5200, 4480];
   elems.push(
     subHeading('5.5 Payment Schedule'),
@@ -522,7 +643,7 @@ function buildPricingTables() {
     sp(100),
   );
 
-  // 5.6 Payment Terms
+  // ── 5.6 Payment Terms ────────────────────────────────────────────────────────
   elems.push(
     subHeading('5.6 Payment Terms'),
     p([run('Payment is due within 30 days of invoice date. All prices are exclusive of applicable taxes (GST). Any travel and out-of-pocket expenses will be billed separately at actuals. Prices are valid for 30 days from the date of this proposal.', 18)]),
@@ -640,22 +761,20 @@ const doc = new Document({
       page: {
         size: { width: DXA_PAGE, height: 15840 },
         margin: { top: DXA_MARGIN, bottom: DXA_MARGIN, left: DXA_MARGIN, right: DXA_MARGIN },
-        borders: { pageBorders: { display: "notFirstPage", zOrder: "front", offsetFrom: "page", top: { style: BorderStyle.SINGLE, size: 8, color: C_ORANGE, space: 24 }, bottom: { style: BorderStyle.SINGLE, size: 8, color: C_ORANGE, space: 24 }, left: { style: BorderStyle.SINGLE, size: 8, color: C_ORANGE, space: 24 }, right: { style: BorderStyle.SINGLE, size: 8, color: C_ORANGE, space: 24 } } }
       },
     },
     headers: {
       default: new Header({
         children: [
           new Paragraph({
-            border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: C_ORANGE, space: 1 } },
+            border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: C_MID_BLUE, space: 1 } },
             children: [
-              ...(loadImg('image2.png') ? [new ImageRun({ data: loadImg('image2.png'), transformation: { width: 140, height: 20 }, type: 'png' })] : [bold('AutomationEdge', 16, C_DARK_BLUE)]),
-              new TextRun({ text: '\t', size: 16 }),
-              run(`Proposal for ${client_name || 'Client'}`, 14, '595959'),
-              new TextRun({ text: '\t', size: 16 }),
-              ...(client_image && loadImg(client_image) ? [new ImageRun({ data: loadImg(client_image), transformation: { width: 80, height: 25 }, type: 'png' })] : []),
+              ...(loadImg('image2.png') ? [new ImageRun({ data: loadImg('image2.png'), transformation: { width: 180, height: 22 }, type: 'png' })] : [bold('AutomationEdge', 18, C_DARK_BLUE)]),
+
+              new TextRun({ text: '\t', size: 18 }),
+              run(`AutomationEdge Proposal for ${client_name || 'Client'}`, 16, '595959'),
             ],
-            tabStops: [ { type: TabStopType.CENTER, position: DXA_CONTENT / 2 }, { type: TabStopType.RIGHT, position: DXA_CONTENT } ],
+            tabStops: [{ type: TabStopType.RIGHT, position: DXA_CONTENT }],
           }),
         ],
       }),
@@ -664,12 +783,12 @@ const doc = new Document({
       default: new Footer({
         children: [
           new Paragraph({
-            border: { top: { style: BorderStyle.SINGLE, size: 6, color: C_ORANGE, space: 1 } },
+            border: { top: { style: BorderStyle.SINGLE, size: 6, color: C_MID_BLUE, space: 1 } },
             children: [
-              run('Confidential | AutomationEdge', 14, '595959'),
-              new TextRun({ text: '\t', size: 14 }),
-              run('Page ', 14, '595959'),
-              new SimpleField('PAGE', '', { size: 14, font: 'Arial', color: '595959' }),
+              run('Confidential | AutomationEdge', 16, '595959'),
+              new TextRun({ text: '\t', size: 16 }),
+              run('Page ', 16, '595959'),
+              new SimpleField('PAGE', '', { size: 16, font: 'Arial', color: '595959' }),
             ],
             tabStops: [{ type: TabStopType.RIGHT, position: DXA_CONTENT }],
           }),
@@ -678,36 +797,41 @@ const doc = new Document({
     },
     children: [
       // ════════ PAGE 1: COVER ════════
-      p([
-        ...(loadImg('image1.png') ? [new ImageRun({ data: loadImg('image1.png'), transformation: { width: 630, height: 354 }, type: 'png', floating: { horizontalPosition: { offset: 0 }, verticalPosition: { offset: 0 } } })] : []),
-      ], { alignment: AlignmentType.CENTER }),
-      sp(400),
-      p([bold('Budgetary Proposal', 32, C_WHITE)], { alignment: AlignmentType.CENTER }),
-      p([run('for ', 24, C_WHITE), bold('Business Process Automation', 28, C_ORANGE)], { alignment: AlignmentType.CENTER }),
-      p([run('By', 22, C_WHITE)], { alignment: AlignmentType.CENTER }),
-      sp(80),
+      ...(loadImg('image1.png')
+        ? [new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 300, after: 600 },
+            children: [new ImageRun({ data: loadImg('image1.png'), transformation: { width: 624, height: 313 }, type: 'png' })],
+          })]
+        : [sp(400)]),
+      
+      p([bold('Budgetary Proposal', 52, C_DARK_BLUE)], { alignment: AlignmentType.CENTER, spacing: { after: 120 } }),
+      p([run('for ', 52, C_DARK_BLUE), bold('Business Process Automation', 52, C_MID_BLUE)], { alignment: AlignmentType.CENTER, spacing: { after: 400 } }),
+      
+      p([run('By', 36, C_DARK_BLUE)], { alignment: AlignmentType.CENTER, spacing: { after: 200 } }),
+      
       new Paragraph({
         alignment: AlignmentType.CENTER,
+        spacing: { after: 600 },
         children: loadImg('image2.png')
-          ? [new ImageRun({ data: loadImg('image2.png'), transformation: { width: 220, height: 28 }, type: 'png' })]
-          : [bold('AutomationEdge', 24, C_MID_BLUE)],
+          ? [new ImageRun({ data: loadImg('image2.png'), transformation: { width: 350, height: 44 }, type: 'png' })]
+          : [bold('AutomationEdge', 32, C_MID_BLUE)],
       }),
-      sp(120),
-      p([run('Submitted To', 22, C_WHITE)], { alignment: AlignmentType.CENTER }),
-      sp(60),
+      
+      p([run('Submitted To', 32, C_DARK_BLUE)], { alignment: AlignmentType.CENTER, spacing: { after: 200 } }),
+      
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: (client_image && loadImg(client_image))
-          ? [new ImageRun({ data: loadImg(client_image), transformation: { width: 185, height: 47 }, type: 'png' })]
-          : [bold(client_name || 'Client', 26, C_WHITE)],
+        spacing: { after: 600 },
+        children: [bold(client_name || 'Client', 28, C_DARK_BLUE)],
       }),
-      sp(120),
-      p([run(proposal_date || '', 20, C_WHITE)], { alignment: AlignmentType.CENTER }),
+      
+      p([run(proposal_date || '', 24, C_DARK_BLUE)], { alignment: AlignmentType.CENTER }),
 
       pageBreakPara(),
 
       // ════════ PAGE 2: TOC ════════
-      p([new TextRun({ text: 'Table of Content', bold: true, size: 28, font: 'Arial', color: C_ORANGE, underline: { type: UnderlineType.SINGLE } })]),
+      p([new TextRun({ text: 'Table of Content', bold: true, size: 28, font: 'Arial', color: C_DARK_BLUE, underline: { type: UnderlineType.SINGLE } })]),
       sp(60),
       ...[
         ['Confidentiality Statement', '3'],
@@ -805,7 +929,7 @@ const doc = new Document({
       p([run('5. PS Efforts are assumed as per Ref. complexity grid sheet, and any deviation in complexity parameters will have corresponding changes in Efforts.', 18)]),
       sp(80),
       subSubHeading('Automation Complexity Matrix'),
-      ...(loadImg('image4.png') ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: loadImg('image4.png'), transformation: { width: 627, height: 216 }, type: 'png' })] })] : []),
+      ...(loadImg('image4.png') ? [imgPara('image4.png', 627, 216, 80)] : []),
 
       pageBreakPara(),
 
@@ -815,12 +939,12 @@ const doc = new Document({
       sp(80),
       buildSolutionMappingTable(),
       sp(80),
-      ...(loadImg('image6.png') ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: loadImg('image6.png'), transformation: { width: 624, height: 288 }, type: 'png' })] }), sp(80)] : []),
+      ...(loadImg('image6.png') ? [imgPara('image6.png', 624, 288, 80)] : []),
       p([run('• RPA is ideal when processes involve structured data, or when automating interactions with systems that don\'t provide API integration, enhancing efficiency without compromising security.', 18)]),
       p([run('• The platform offers multiple recorders that capture and replicate human actions, making it easy to automate processes by mimicking the exact steps performed by a user.', 18)]),
       p([run('• AutomationEdge bots are equipped to send email alerts, notifications, and generate dashboards or reports to keep stakeholders informed of the automation process.', 18)]),
       sp(80),
-      ...(loadImg('image7.png') ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: loadImg('image7.png'), transformation: { width: 522, height: 232 }, type: 'png' })] }), sp(80)] : []),
+      ...(loadImg('image7.png') ? [imgPara('image7.png', 522, 232, 80)] : []),
       p([bold('Notes for Proposed Intelligent Document Processing Solution:', 18)]),
       ...[
         'Document will be in English language only.',
@@ -858,7 +982,7 @@ const doc = new Document({
       // ════════ SECTION 2.4: PROJECT APPROACH ════════
       subHeading('2.4 Project Approach & Plan'),
       subSubHeading('Implementation Approach'),
-      ...(loadImg('image9.png') ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: loadImg('image9.png'), transformation: { width: 533, height: 300 }, type: 'png' })] }), sp(80)] : []),
+      ...(loadImg('image9.png') ? [imgPara('image9.png', 533, 300, 80)] : []),
       subSubHeading('Training'),
       p([run('Training will be delivered on a \'Train the Trainer\' basis for development and admin staff (max. 3 count).', 18)]),
       bulletPara('Web-based training for 3 working days, 2 (two) hours per day.'),
@@ -985,7 +1109,7 @@ const doc = new Document({
       sp(60),
       ...buildAboutSection(),
       sp(80),
-      ...(loadImg('image10.png') ? [new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: loadImg('image10.png'), transformation: { width: 252, height: 295 }, type: 'png' })] })] : []),
+      ...(loadImg('image10.png') ? [imgPara('image10.png', 252, 295, 0)] : []),
     ],
   }],
 });
