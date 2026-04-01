@@ -13,7 +13,10 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import LogoutIcon from "@mui/icons-material/Logout";
 import ManageAccountsIcon from "@mui/icons-material/ManageAccounts";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import LightModeIcon from "@mui/icons-material/LightMode";
 import { useAuth } from "../context/AuthContext";
+import { useThemeMode } from "../context/ThemeContext";
 import { useNavigate } from "react-router-dom";
 
 export const TOOLS = [
@@ -77,6 +80,7 @@ export default function Sidebar({
   sidebarCollapsed,
 }) {
   const { user, logout } = useAuth();
+  const { mode, toggleTheme } = useThemeMode();
   const navigate = useNavigate();
   const drawerWidth = collapsed ? sidebarCollapsed : sidebarWidth;
 
@@ -93,9 +97,9 @@ export default function Sidebar({
         "& .MuiDrawer-paper": {
           width: drawerWidth,
           boxSizing: "border-box",
-          background: "rgba(17,34,64,0.72)",
+          background: "var(--ae-glass)",
           backdropFilter: "blur(20px)",
-          borderRight: "1px solid rgba(255,255,255,0.07)",
+          borderRight: "1px solid var(--ae-glass-border)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -123,7 +127,7 @@ export default function Sidebar({
                 fontFamily: "'Syne', sans-serif",
                 fontWeight: 700,
                 fontSize: "13.5px",
-                color: "#fff",
+                color: "text.primary",
                 whiteSpace: "nowrap",
                 letterSpacing: "-0.3px",
               }}
@@ -144,20 +148,36 @@ export default function Sidebar({
             </Typography>
           </Box>
         )}
+        
+        {/* Theme Toggle */}
+        {!collapsed && (
+          <Tooltip title={mode === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+            <IconButton 
+              onClick={toggleTheme} 
+              size="small" 
+              sx={{ 
+                color: "#F26522", 
+                bgcolor: "var(--ae-surface)",
+                mr: 1,
+                "&:hover": { bgcolor: "var(--ae-surface-hover)" }
+              }}
+            >
+              {mode === 'dark' ? <LightModeIcon sx={{ fontSize: 18 }} /> : <DarkModeIcon sx={{ fontSize: 18 }} />}
+            </IconButton>
+          </Tooltip>
+        )}
+
         <IconButton
           onClick={onToggle}
           size="small"
           sx={{
-            position: "absolute",
-            right: collapsed ? -12 : 8,
-            top: "50%",
-            transform: "translateY(-50%)",
-            background: "#0a1628",
-            border: "1px solid rgba(255,255,255,0.1)",
+            flexShrink: 0,
+            background: "var(--ae-navy-mid)",
+            border: "1px solid var(--ae-border)",
             color: "#8fa3c0",
             padding: "4px",
             boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-            "&:hover": { background: "#F26522", color: "#fff", borderColor: "#F26522" },
+            "&:hover": { background: "var(--ae-orange)", color: "#fff", borderColor: "var(--ae-orange)" },
             zIndex: 100,
           }}
         >
@@ -235,7 +255,7 @@ export default function Sidebar({
                         sx={{
                           fontSize: "13px",
                           fontWeight: isActive ? 600 : 500,
-                          color: isActive ? "#fff" : "#e8edf5",
+                          color: isActive ? "var(--ae-orange)" : "text.primary",
                           whiteSpace: "nowrap",
                         }}
                       >
@@ -317,7 +337,7 @@ export default function Sidebar({
                 sx={{
                   fontSize: "12px",
                   fontWeight: 600,
-                  color: "#fff",
+                  color: "text.primary",
                   whiteSpace: "nowrap",
                 }}
               >
@@ -347,13 +367,13 @@ export default function Sidebar({
             justifyContent: collapsed ? "center" : "flex-start",
             minWidth: 0,
             px: collapsed ? 0 : 2,
-            borderColor: "rgba(255,255,255,0.1)",
-            color: "#8fa3c0",
+            borderColor: "var(--ae-border)",
+            color: "text.primary",
             fontSize: "11px",
             "&:hover": {
-              borderColor: "#F26522",
-              background: "rgba(242,101,34,0.05)",
-              color: "#fff",
+              borderColor: "var(--ae-orange)",
+              background: "var(--ae-surface-hover)",
+              color: "text.primary",
             },
             "& .MuiButton-startIcon": {
               margin: collapsed ? 0 : "",

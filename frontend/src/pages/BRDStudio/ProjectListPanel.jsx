@@ -20,7 +20,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Divider,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -129,10 +128,11 @@ export default function ProjectListPanel({ onSelectProject, activeProjectId, tok
         width: collapsed ? 64 : 260,
         height: "100%",
         flexShrink: 0,
-        borderRight: "1px solid rgba(255,255,255,0.06)",
+        borderRight: "1px solid var(--ae-border)",
         display: "flex",
         flexDirection: "column",
-        bgcolor: "rgba(10,22,40,0.9)",
+        bgcolor: "var(--ae-glass)",
+        backdropFilter: "blur(10px)",
         transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
         overflow: "hidden",
       }}
@@ -145,13 +145,13 @@ export default function ProjectListPanel({ onSelectProject, activeProjectId, tok
         alignItems: "center", 
         justifyContent: collapsed ? "center" : "space-between",
         gap: 1, 
-        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        borderBottom: "1px solid var(--ae-border)",
         flexShrink: 0
       }}>
         {!collapsed && (
           <>
-            <FolderOpenIcon sx={{ color: "#F26522", fontSize: 18 }} />
-            <Typography variant="subtitle2" sx={{ color: "#e8edf5", fontWeight: 700, flex: 1, fontSize: 13 }}>
+            <FolderOpenIcon sx={{ color: "var(--ae-orange)", fontSize: 18 }} />
+            <Typography variant="subtitle2" sx={{ color: "text.primary", fontWeight: 700, flex: 1, fontSize: 13 }}>
               Projects
             </Typography>
           </>
@@ -160,7 +160,7 @@ export default function ProjectListPanel({ onSelectProject, activeProjectId, tok
           {!collapsed && (
             <>
               <Tooltip title="Refresh">
-                <IconButton size="small" onClick={fetchProjects} sx={{ color: "#8fa3c0", mr: 0.5 }}>
+                <IconButton size="small" onClick={fetchProjects} sx={{ color: "text.secondary", mr: 0.5 }}>
                   <RefreshIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
@@ -181,10 +181,10 @@ export default function ProjectListPanel({ onSelectProject, activeProjectId, tok
       <Box sx={{ flex: 1, overflowY: "auto", p: collapsed ? 0.5 : 1.5 }}>
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-            <CircularProgress size={20} color="inherit" sx={{ color: "#F26522" }} />
+            <CircularProgress size={20} color="inherit" sx={{ color: "var(--ae-orange)" }} />
           </Box>
         ) : projects.length === 0 ? (
-          !collapsed && <Typography sx={{ color: "#8fa3c0", fontSize: 12, textAlign: "center", mt: 4 }}>No projects active</Typography>
+          !collapsed && <Typography sx={{ color: "text.secondary", fontSize: 12, textAlign: "center", mt: 4 }}>No projects active</Typography>
         ) : (
           projects.map((p) => {
             const isActive = p.id === activeProjectId;
@@ -205,8 +205,8 @@ export default function ProjectListPanel({ onSelectProject, activeProjectId, tok
                   textAlign: collapsed ? "center" : "left",
                   transition: "all 0.2s",
                   "&:hover": {
-                    bgcolor: isActive ? "rgba(242,101,34,0.12)" : "rgba(255,255,255,0.03)",
-                    borderColor: isActive ? "rgba(242,101,34,0.4)" : "rgba(255,255,255,0.08)",
+                    bgcolor: isActive ? "rgba(242,101,34,0.12)" : "rgba(0,0,0,0.04)",
+                    borderColor: isActive ? "rgba(242,101,34,0.4)" : "var(--ae-border)",
                   },
                 }}
               >
@@ -216,7 +216,7 @@ export default function ProjectListPanel({ onSelectProject, activeProjectId, tok
                       <Typography
                         variant="body2"
                         sx={{
-                          color: isActive ? "#F26522" : "#e8edf5",
+                          color: isActive ? "var(--ae-orange)" : "text.primary",
                           fontWeight: isActive ? 700 : 500,
                           flex: 1,
                           fontSize: 13,
@@ -230,7 +230,7 @@ export default function ProjectListPanel({ onSelectProject, activeProjectId, tok
                       <IconButton
                         size="small"
                         onClick={(e) => handleDelete(e, p.id)}
-                        sx={{ color: "rgba(255,255,255,0.15)", "&:hover": { color: "#f44336" } }}
+                        sx={{ color: "text.secondary", "&:hover": { color: "error.main" } }}
                       >
                         <DeleteOutlineIcon sx={{ fontSize: 14 }} />
                       </IconButton>
@@ -247,7 +247,7 @@ export default function ProjectListPanel({ onSelectProject, activeProjectId, tok
                           color: cfg.color,
                         }}
                       />
-                      <Typography sx={{ color: "#8fa3c0", fontSize: 10, ml: "auto" }}>
+                      <Typography sx={{ color: "text.secondary", fontSize: 10, ml: "auto" }}>
                         {formatDate(p.updated_at)}
                       </Typography>
                     </Box>
@@ -269,9 +269,9 @@ export default function ProjectListPanel({ onSelectProject, activeProjectId, tok
         onClose={() => setCreateDialog(false)}
         maxWidth="xs"
         fullWidth
-        PaperProps={{ sx: { bgcolor: "#112240", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 3 } }}
+        PaperProps={{ sx: { bgcolor: "background.paper", border: "1px solid var(--ae-border)", borderRadius: 3 } }}
       >
-        <DialogTitle sx={{ color: "#e8edf5", fontWeight: 700 }}>New Project</DialogTitle>
+        <DialogTitle sx={{ color: "text.primary", fontWeight: 700 }}>New Project</DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
             <TextField

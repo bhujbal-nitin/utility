@@ -239,7 +239,7 @@ function MessageBubble({ message, token }) {
           sx={{
             fontSize: "13.5px",
             lineHeight: 1.6,
-            color: isUser ? "#fff" : "#e8edf5",
+            color: isUser ? "#fff" : "text.primary",
             "& p": { m: 0, pb: 1 },
             "& pre": { background: "rgba(0,0,0,0.3)", p: 1.5, borderRadius: "6px", overflowX: "auto" },
             "& code": { fontFamily: "monospace", fontSize: "12px", background: "rgba(0,0,0,0.2)", p: "2px 4px", borderRadius: "4px" },
@@ -442,35 +442,32 @@ export default function AuthContextChatWindow({ tool, onBack }) {
         }
 
         if (chunkHasData) {
-          if (!hasAddedMessage) {
-            hasAddedMessage = true;
-            setShowWelcome(false);
-            setIsTyping(false);
-            setMessages((prev) => [
-              ...prev,
-              {
-                role: "assistant",
-                content: botTextState,
-                time: now(),
-                artifacts: [...botArtifactsState],
-                tokens: latestTokens
-              }
-            ]);
-          } else {
-            setMessages((prev) => {
-              const newMsgs = [...prev];
-              const lastIdx = newMsgs.length - 1;
-              if (lastIdx >= 0 && newMsgs[lastIdx].role === "assistant") {
-                newMsgs[lastIdx] = {
-                  ...newMsgs[lastIdx],
-                  content: botTextState,
-                  artifacts: [...botArtifactsState],
-                  tokens: latestTokens || newMsgs[lastIdx].tokens
-                };
-              }
-              return newMsgs;
-            });
-          }
+          const updateMessages = (text, artifacts, tokens) => {
+            if (!hasAddedMessage) {
+              hasAddedMessage = true;
+              setShowWelcome(false);
+              setIsTyping(false);
+              setMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: text, time: now(), artifacts: [...artifacts], tokens }
+              ]);
+            } else {
+              setMessages((prev) => {
+                const newMsgs = [...prev];
+                const lastIdx = newMsgs.length - 1;
+                if (lastIdx >= 0 && newMsgs[lastIdx].role === "assistant") {
+                  newMsgs[lastIdx] = {
+                    ...newMsgs[lastIdx],
+                    content: text,
+                    artifacts: [...artifacts],
+                    tokens: tokens || newMsgs[lastIdx].tokens
+                  };
+                }
+                return newMsgs;
+              });
+            }
+          };
+          updateMessages(botTextState, botArtifactsState, latestTokens);
         }
       }
       setIsTyping(false);
@@ -513,8 +510,8 @@ export default function AuthContextChatWindow({ tool, onBack }) {
           gap: 1.5,
           px: 2.5,
           py: 1.6,
-          borderBottom: "1px solid rgba(255,255,255,0.07)",
-          background: "rgba(10,22,40,0.5)",
+          borderBottom: "1px solid var(--ae-border)",
+          background: "var(--ae-glass)",
           backdropFilter: "blur(10px)",
           flexShrink: 0,
         }}
@@ -526,13 +523,13 @@ export default function AuthContextChatWindow({ tool, onBack }) {
             sx={{
               width: 32,
               height: 32,
-              border: "1px solid rgba(255,255,255,0.07)",
+              border: "1px solid var(--ae-border)",
               borderRadius: "8px",
-              background: "rgba(255,255,255,0.04)",
-              color: "#8fa3c0",
+              background: "var(--ae-surface)",
+              color: "text.secondary",
               "&:hover": {
-                background: "rgba(255,255,255,0.07)",
-                color: "#e8edf5",
+                background: "var(--ae-surface-hover)",
+                color: "text.primary",
               },
             }}
           >
@@ -546,7 +543,7 @@ export default function AuthContextChatWindow({ tool, onBack }) {
               fontFamily: "'Syne', sans-serif",
               fontSize: "15px",
               fontWeight: 700,
-              color: "#fff",
+              color: "text.primary",
               letterSpacing: "-0.2px",
             }}
           >
@@ -582,17 +579,17 @@ export default function AuthContextChatWindow({ tool, onBack }) {
               gap: 0.7,
               px: 1.5,
               py: 0.7,
-              border: "1px solid rgba(255,255,255,0.07)",
+              border: "1px solid var(--ae-border)",
               borderRadius: "8px",
-              background: "rgba(255,255,255,0.04)",
-              color: "#506280",
+              background: "var(--ae-surface)",
+              color: "text.secondary",
               cursor: "pointer",
               fontSize: "12px",
               fontFamily: "'DM Sans', sans-serif",
               transition: "all 0.2s ease",
               "&:hover": {
-                background: "rgba(255,255,255,0.07)",
-                color: "#8fa3c0",
+                background: "var(--ae-surface-hover)",
+                color: "text.primary",
               },
             }}
           >
@@ -667,7 +664,7 @@ export default function AuthContextChatWindow({ tool, onBack }) {
                 fontFamily: "'Syne', sans-serif",
                 fontSize: "22px",
                 fontWeight: 700,
-                color: "#fff",
+                color: "text.primary",
                 letterSpacing: "-0.4px",
               }}
             >
@@ -737,8 +734,8 @@ export default function AuthContextChatWindow({ tool, onBack }) {
           px: 2.5,
           pt: 1.8,
           pb: 2,
-          borderTop: "1px solid rgba(255,255,255,0.07)",
-          background: "rgba(10,22,40,0.5)",
+          borderTop: "1px solid var(--ae-border)",
+          background: "var(--ae-glass)",
           backdropFilter: "blur(10px)",
           flexShrink: 0,
           display: "flex",
@@ -751,8 +748,8 @@ export default function AuthContextChatWindow({ tool, onBack }) {
             display: "flex",
             alignItems: "flex-end",
             gap: 1.2,
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
+            background: "var(--ae-surface)",
+            border: "1px solid var(--ae-border)",
             borderRadius: "12px",
             px: 1.5,
             py: 1.2,

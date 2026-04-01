@@ -12,6 +12,9 @@
   --ae-orange-light: #ff7d35;
   --ae-orange-glow: rgba(242, 101, 34, 0.18);
   --ae-white: #ffffff;
+  
+  /* Defaults (Dark Mode) */
+  --ae-bg: #0a1628;
   --ae-text-primary: #e8edf5;
   --ae-text-secondary: #8fa3c0;
   --ae-text-muted: #506280;
@@ -20,6 +23,8 @@
   --ae-surface: rgba(255, 255, 255, 0.04);
   --ae-surface-hover: rgba(255, 255, 255, 0.07);
   --ae-glass: rgba(17, 34, 64, 0.72);
+  --ae-glass-border: rgba(255, 255, 255, 0.08);
+
   --sidebar-width: 268px;
   --sidebar-collapsed: 68px;
   --topbar-height: 56px;
@@ -28,13 +33,26 @@
   --radius-sm: 8px;
 }
 
+[data-theme='light'] {
+  --ae-bg: #f8fafc;
+  --ae-text-primary: #0f172a;
+  --ae-text-secondary: #475569;
+  --ae-text-muted: #94a3b8;
+  --ae-border: rgba(0, 0, 0, 0.08);
+  --ae-border-active: rgba(242, 101, 34, 0.6);
+  --ae-surface: rgba(0, 0, 0, 0.02);
+  --ae-surface-hover: rgba(0, 0, 0, 0.04);
+  --ae-glass: rgba(255, 255, 255, 0.85);
+  --ae-glass-border: rgba(0, 0, 0, 0.05);
+}
+
 /* ── Reset ─────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body, #root {
   height: 100%;
   font-family: "DM Sans", sans-serif;
-  background: var(--ae-navy);
+  background: var(--ae-bg);
   color: var(--ae-text-primary);
   overflow: hidden;
 }
@@ -47,8 +65,7 @@ html, body, #root {
   overflow: hidden;
   background:
     radial-gradient(ellipse 80% 60% at 15% 10%, rgba(242, 101, 34, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 70% 50% at 85% 90%, rgba(17, 34, 64, 0.8) 0%, transparent 60%),
-    var(--ae-navy);
+    var(--ae-bg);
 }
 
 .main-content {
@@ -65,7 +82,42 @@ html, body, #root {
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--ae-navy-light); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--ae-orange); }
+/* Global Scrollbar */
+* {
+  scrollbar-width: auto; /* Firefox */
+  scrollbar-color: var(--ae-orange) rgba(0, 0, 0, 0.4); /* Firefox */
+}
+::-webkit-scrollbar { 
+  width: 16px !important; 
+  height: 16px !important; 
+}
+::-webkit-scrollbar-track { 
+  background: rgba(0, 0, 0, 0.4) !important; 
+}
+::-webkit-scrollbar-thumb { 
+  background: var(--ae-orange) !important;
+  border-radius: 20px !important;
+  border: 4px solid var(--ae-bg) !important;
+  background-clip: padding-box !important;
+}
+::-webkit-scrollbar-thumb:hover { 
+  background: var(--ae-orange-light) !important;
+  border: 3px solid var(--ae-bg) !important;
+}
+
+/* Step 3 & Document Editor Scrollbar Overrides */
+.custom-scrollbar::-webkit-scrollbar { 
+  width: 16px !important; 
+}
+.custom-scrollbar::-webkit-scrollbar-track { 
+  background: rgba(0, 0, 0, 0.3) !important;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb { 
+  background: var(--ae-orange) !important;
+  border-radius: 20px !important;
+  border: 4px solid #050a14 !important; /* Match DocumentEditor bg */
+  background-clip: padding-box !important;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { 
+  background: var(--ae-orange-light) !important;
+}

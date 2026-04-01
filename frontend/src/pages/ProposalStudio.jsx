@@ -312,7 +312,7 @@ export default function ProposalStudio({ onBack }) {
     if (botMetrics.suggestedBots && botMetrics.suggestedBots !== softParams.totalBots) {
       setSoftParams(prev => ({ ...prev, totalBots: botMetrics.suggestedBots }));
     }
-  }, [botMetrics.suggestedBots]);
+  }, [botMetrics.suggestedBots, softParams.totalBots]);
 
   // Hardware RAM Calculation (v8 CEILING logic with standard slabs)
   const hwRamResult = useMemo(() => {

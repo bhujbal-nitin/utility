@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     # Proposal Service Storage (Outside backend to prevent hot-reload loops)
     PROPOSAL_STUDIO_DATA_DIR: str = "../proposal_studio_data"
     
+    # Automation Service Storage (Outside backend to prevent hot-reload loops)
+    AE_STUDIO_DATA_DIR: str = "../ae_studio_data"
+    AI_STUDIO_DOWNLOADS_DIR: str = "../ae_studio_data/downloads"
+    AI_STUDIO_KB_FOLDER: str = "automation_service/knowledge"
+    AI_STUDIO_SYSTEM_PROMPT_PATH: str = "automation_service/knowledge/prompt.txt"
+    AI_STUDIO_SCRIPTS_DIR: str = "../ae_studio_data/scripts"
+    AI_STUDIO_CARD_HELPER_DIR: str = "../ae_studio_data/card_helpers"
+    AI_STUDIO_TEMPLATES_DIR: str = "../ae_studio_data/templates"
+    AI_STUDIO_HOOKS_DIR: str = "../ae_studio_data/hooks"
+    
     # Enterprise DOCX editor integration (OnlyOffice/Collabora compatible scaffold)
     DOCX_EDITOR_ENABLED: bool = False
     DOCX_EDITOR_URL: str = ""  # e.g. https://docs.example.com/web-apps/apps/documenteditor/main/index.html

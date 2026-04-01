@@ -308,16 +308,27 @@ def _detect_teams_gallery_only(image_path: str) -> bool:
     right_mean = float(right.mean()) if right.size else 0.0
     brightness_delta = abs(left_mean - right_mean)
 
-    # Strict thresholds for gallery-only. Conservative to avoid false positives.
-    mean_std_ceiling = 18.0
-    side_edge_density_floor = 0.06
-    brightness_delta_ceiling = 18.0
+    # Improved gallery detection (works for Light/Dark and Sparse/Busy):
+    # - Detect "mostly background" using a fuzzy histogram range (+/- 15 levels).
+    # - Low visual complexity (edge density) is characteristic of static gallery views.
+    hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
+    max_color = np.argmax(hist)
+    
+    mask = cv2.inRange(gray, max(0, int(max_color) - 15), min(255, int(max_color) + 15))
+    near_ratio = np.count_nonzero(mask) / float(gray.size)
 
+    # Teams background: dark (low) or light (high) are common.
+    is_boring_bg = near_ratio > 0.65
+    
+    # Text-heavy business content almost always has edge density > 0.02
+    edge_cap = 0.015
+
+    # Drop if uniform background, low complexity, and grid uniformity/symmetry match a gallery.
     return (
-        (mean_std <= mean_std_ceiling)
-        and (left_edge_density >= side_edge_density_floor)
-        and (right_edge_density >= side_edge_density_floor)
-        and (brightness_delta <= brightness_delta_ceiling)
+        is_boring_bg
+        and (edge_density < edge_cap)
+        and (brightness_delta < 28.0)
+        and (mean_std < 28.0)
     )
 
 

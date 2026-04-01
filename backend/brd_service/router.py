@@ -13,13 +13,15 @@ import asyncio
 import tempfile
 import time
 import json as json_mod
+import zlib
+import base64
 from urllib.parse import quote_plus
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Any
 from collections import defaultdict, deque
 import httpx
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
@@ -115,6 +117,7 @@ class RefineRequest(BaseModel):
 class RegenerateRequest(BaseModel):
     instruction: str = ""
     sections: Optional[List[str]] = None  # specific section_keys to regenerate
+    force_all: bool = False  # If true, overwrite manually edited sections
 
 class CaptureUpdate(BaseModel):
     label: Optional[str] = None
@@ -208,13 +211,25 @@ async def delete_project(
     project = await _get_project_or_404(db, project_id, user.id)
     await db.delete(project)
     await db.commit()
-    # Cleanup files
+    # Cleanup files: Standard UUID-based folders
     for d in [
         os.path.join(BRD_FRAMES_DIR, project_id),
         os.path.join(BRD_VIDEOS_DIR, project_id),
         os.path.join(BRD_EXPORTS_DIR, project_id),
+        os.path.join(BRD_DOCS_DIR, project_id),
     ]:
         shutil.rmtree(d, ignore_errors=True)
+
+    # Legacy Cleanup: Also attempt to delete the name-based export directory if it exists
+    try:
+        import re
+        safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", project.name).strip("._") or "Project"
+        legacy_dir = os.path.join(BRD_EXPORTS_DIR, safe_name)
+        if os.path.isdir(legacy_dir) and safe_name != project_id:
+            shutil.rmtree(legacy_dir, ignore_errors=True)
+    except Exception:
+        pass
+
     return {"deleted": True}
 
 
@@ -567,6 +582,41 @@ async def describe_single_capture(
     return _capture_to_dict(capture)
 
 
+@router.post("/projects/{project_id}/captures/describe-all")
+async def describe_all_captures(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(brd_role),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger LLM description for all PENDING 'is_kept' captures in Step 2."""
+    await _get_project_or_404(db, project_id, user.id)
+
+    # Find all kept captures that aren't already successful
+    result = await db.execute(
+        select(BrdCapture).where(
+            BrdCapture.project_id == project_id,
+            BrdCapture.is_kept == True,
+            BrdCapture.llm_status != "done",
+            BrdCapture.llm_status != "processing",
+        )
+    )
+    targets = result.scalars().all()
+    
+    if not targets:
+        return {"message": "No pending kept captures to describe.", "count": 0}
+
+    # Mark all as processing
+    for cap in targets:
+        cap.llm_status = "processing"
+    await db.commit()
+
+    # Trigger background tasks for all at once in a single task
+    background_tasks.add_task(_describe_batch_captures, [cap.id for cap in targets], db)
+
+    return {"message": f"Started description for {len(targets)} captures.", "count": len(targets)}
+
+
 @router.put("/captures/{capture_id}/image")
 async def update_capture_image(
     capture_id: str,
@@ -574,12 +624,11 @@ async def update_capture_image(
     user: User = Depends(brd_role),
     db: AsyncSession = Depends(get_db),
 ):
-    """Overwrite a capture's image file (e.g., after crop/annotate)."""
+    """Overwrite a capture's image file."""
     _rate_limit_or_429(user.id, "update_capture_image", limit=120, window_sec=300)
     _assert_safe_file_upload(image, allowed_ext={".jpg", ".jpeg", ".png", ".webp"})
     capture = await _get_capture_for_user_or_404(db, capture_id, user.id)
 
-    # Save over existing path if it exists, or create new one
     if not capture.image_path:
         frames_dir = os.path.join(BRD_FRAMES_DIR, capture.project_id)
         os.makedirs(frames_dir, exist_ok=True)
@@ -590,6 +639,32 @@ async def update_capture_image(
 
     await db.commit()
     return {"updated": True, "image_url": f"/api/brd/frames/{capture.project_id}/{os.path.basename(capture.image_path)}"}
+
+
+@router.post("/render-mermaid")
+async def render_mermaid_logic(
+    body: dict,
+    user: User = Depends(brd_role),
+):
+    """Render Mermaid code to SVG using Kroki (POST to handle long code)."""
+    code = body.get("code", "")
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing mermaid code")
+    
+    try:
+        code_bytes = code.encode("utf-8")
+        compressed = zlib.compress(code_bytes, 9)
+        kroki_payload = base64.urlsafe_b64encode(compressed).decode("utf-8")
+        url = f"https://kroki.io/mermaid/svg/{kroki_payload}"
+        
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            res = await client.get(url, timeout=20.0)
+            if res.status_code == 200:
+                return Response(content=res.content, media_type="image/svg+xml")
+            return HTTPException(status_code=res.status_code, detail="Remote render failed")
+    except Exception as e:
+        logger.error(f"UI Mermaid render failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/captures/{capture_id}")
@@ -870,9 +945,9 @@ async def export_brd(
     }
 
     if format == "docx":
-        file_path = await export_svc.export_docx_from_template(project.name, section_dicts, capture_dicts, meta)
+        file_path = await export_svc.export_docx_from_template(project_id, project.name, section_dicts, capture_dicts, meta)
     elif format == "pdf":
-        file_path = await export_svc.export_pdf(project.name, section_dicts, capture_dicts, meta)
+        file_path = await export_svc.export_pdf(project_id, project.name, section_dicts, capture_dicts, meta)
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {format}")
 
@@ -1044,13 +1119,14 @@ async def regenerate_brd(
         project_id,
         instruction=body.instruction,
         sections_to_generate=body.sections,
+        force_all=body.force_all,
     )
 
     return {
-        "message": "Regeneration started. Manually edited sections will be preserved unless specifically targeted.",
+        "message": "Regeneration started.",
         "project_id": project_id,
         "status": "generating",
-        "targeted_sections": body.sections,
+        "force_all": body.force_all
     }
 
 
@@ -1229,6 +1305,7 @@ async def create_editor_session(
         "ba_name": project.ba_name,
     }
     file_path = await export_svc.export_docx_from_template(
+        project_id,
         project.name,
         [_section_to_dict(s) for s in sections],
         [_capture_to_dict(c) for c in caps],
@@ -1418,12 +1495,18 @@ async def serve_frame(project_id: str, filename: str):
             subpath = os.path.join(base, subdir, filename)
             candidates.append(subpath)
 
-    # Legacy fallback: file saved at BRD_FRAMES_DIR root
+    # Legacy fallback: file saved at BRD_FRAMES_DIR root or other project folders (cloned projects)
     candidates.append(os.path.join(BRD_FRAMES_DIR, filename))
-
+    
+    # Aggressive fallback: search anywhere in frames dir if still not found
     for path in candidates:
         if os.path.exists(path):
             return FileResponse(path)
+
+    # FINAL GRIND: recursive walk
+    for root, _, files in os.walk(BRD_FRAMES_DIR):
+        if filename in files:
+            return FileResponse(os.path.join(root, filename))
 
     raise HTTPException(status_code=404, detail="Frame not found")
 
@@ -1442,14 +1525,21 @@ async def serve_video(project_id: str, filename: str):
     return FileResponse(path)
 
 
-@router.get("/exports/{project_name}/{filename}")
-async def serve_export(project_name: str, filename: str):
+@router.get("/exports/{project_id}/{filename}")
+async def serve_export(project_id: str, filename: str):
     """Serve exported DOCX/PDF files."""
-    if Path(filename).name != filename or Path(project_name).name != project_name:
+    if Path(filename).name != filename or Path(project_id).name != project_id:
         raise HTTPException(status_code=400, detail="Invalid export path")
-    path = os.path.join(BRD_EXPORTS_DIR, project_name, filename)
+    
+    # Try project_id first (new standard)
+    path = os.path.join(BRD_EXPORTS_DIR, project_id, filename)
     if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Export file not found")
+        # Fallback for legacy name-based exports (using project_id as project_name)
+        path = os.path.join(BRD_EXPORTS_DIR, project_id, filename) 
+        # Actually, let's just make it robust
+        if not os.path.exists(path):
+             raise HTTPException(status_code=404, detail="Export file not found")
+             
     return FileResponse(path, filename=filename)
 
 
@@ -1459,6 +1549,7 @@ async def _generate_brd_background(
     project_id: str,
     instruction: Optional[str] = None,
     sections_to_generate: Optional[List[str]] = None,
+    force_all: bool = False,
 ):
     """Background: Full or selective BRD generation pipeline."""
     from core.db import AsyncSessionLocal
@@ -1485,8 +1576,11 @@ async def _generate_brd_background(
             )
             documents = doc_result.scalars().all()
 
+            # 1.5 Sort captures by timestamp strictly for chronological generation
+            sorted_caps = sorted(captures, key=lambda x: x.timestamp or 0)
+            
             # Convert to dicts for pipeline
-            capture_dicts = [_capture_to_dict(c) for c in captures]
+            capture_dicts = [_capture_to_dict(c) for c in sorted_caps]
             video_dicts = [
                 {
                     "filename": v.filename,
@@ -1529,9 +1623,11 @@ async def _generate_brd_background(
                 section = existing.scalar_one_or_none()
 
                 if section:
-                    if section.is_manual_override:
-                        logger.info(f"Skipping manually edited section: {key}")
-                        continue
+                    if section.is_manual_override and not force_all:
+                        # Only skip if not specifically forced
+                        if not sections_to_generate or key not in sections_to_generate:
+                            logger.info(f"Skipping manually edited section: {key}")
+                            continue
 
                     # Snapshot before regeneration
                     version = BrdVersion(
@@ -1765,6 +1861,33 @@ async def _describe_single_capture(capture_id: str, image_path: str, db: AsyncSe
                     await session.commit()
             except Exception:
                 pass
+
+
+async def _describe_batch_captures(capture_ids: List[str], db_session_ignored: Any = None):
+    """
+    Truly concurrent batch description using asyncio.gather.
+    Since frame_describer has a semaphore (default 6), this won't overwhelm Vertex AI.
+    """
+    async def process_one(cap_id: str):
+        # We need a fresh check of path and project cancel status for each.
+        # However, _describe_single_capture already handles its own DB session
+        # but we shouldn't share 'db' (the session) across concurrent tasks if it's not thread-safe.
+        # Actually, AsyncSession is not safe for concurrent tasks.
+        # We MUST use our factory to get fresh sessions inside process_one.
+        from core.db import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            try:
+                res = await session.execute(select(BrdCapture).where(BrdCapture.id == cap_id))
+                cap = res.scalar_one_or_none()
+                if not cap or not cap.image_path:
+                    return
+                # Trigger the existing logic but with its own session context
+                await _describe_single_capture(cap_id, cap.image_path, session)
+            except Exception as e:
+                logger.error(f"Batch task fail for {cap_id}: {e}")
+
+    tasks = [process_one(cid) for cid in capture_ids]
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -80,8 +80,8 @@ class FrameDescriber:
             return ""
 
         # Remove markdown code fences if the model still emits them.
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
+        if "```" in cleaned:
+            cleaned = re.sub(r"```(?:json)?\s*", "", cleaned, flags=re.IGNORECASE)
             cleaned = re.sub(r"\s*```$", "", cleaned)
             cleaned = cleaned.strip()
 
@@ -104,13 +104,42 @@ class FrameDescriber:
         except json.JSONDecodeError:
             pass
 
-        # Best-effort repair for common model mistakes.
+        # Best-effort repair for common model mistakes and TRUNCATED responses.
         repaired = payload
         repaired = repaired.replace("\r\n", "\n").replace("\r", "\n")
-        repaired = re.sub(r",\s*([}\]])", r"\1", repaired)  # trailing commas
-        repaired = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", repaired)  # control chars
-        repaired = repaired.replace("“", '"').replace("”", '"').replace("’", "'")
-        return json.loads(repaired)
+        
+        # 1. Clean non-printable control characters (except common whitespace)
+        repaired = "".join(c for c in repaired if c.isprintable() or c in "\n\r\t")
+        
+        # 2. Fix curly quotes and apostrophes
+        repaired = repaired.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+        
+        # 3. Handle truncated responses (unterminated strings/objects)
+        # If the last character isn't a closing brace/bracket, it might be truncated.
+        if repaired and repaired[-1] not in ("}", "]"):
+            # If we're inside a string, close it first.
+            if repaired.count('"') % 2 != 0:
+                repaired += '"'
+            
+            # Balance braces and brackets
+            open_braces = repaired.count("{") - repaired.count("}")
+            if open_braces > 0:
+                repaired += "}" * open_braces
+            
+            open_brackets = repaired.count("[") - repaired.count("]")
+            if open_brackets > 0:
+                repaired += "]" * open_brackets
+
+        # 4. Remove trailing commas before closing braces/brackets
+        repaired = re.sub(r",\s*([}\]])", r"\1", repaired)
+
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError as e:
+            # Last ditch effort: if it's still failing, it might be a very broken string.
+            # We'll try to find any valid JSON or return an error.
+            logger.warning(f"Final JSON repair failed: {e}. Payload: {repaired[:100]}...")
+            raise
 
     @classmethod
     def _normalize_result(cls, parsed: Dict[str, Any]) -> Dict[str, Any]:

@@ -45,6 +45,9 @@ import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import SaveIcon from "@mui/icons-material/Save";
 import CropIcon from "@mui/icons-material/Crop";
 import VideocamIcon from "@mui/icons-material/Videocam";
+import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import DescriptionIcon from "@mui/icons-material/Description";
 import ImageEditor from "./ImageEditor";
 
 function SortableFrame({
@@ -108,7 +111,7 @@ function SortableFrame({
             />
           ) : (
             <Box sx={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Typography variant="caption" sx={{ color: "#8fa3c0" }}>Preview unavailable</Typography>
+              <Typography variant="caption" sx={{ color: "text.secondary" }}>Preview unavailable</Typography>
             </Box>
           )}
 
@@ -143,8 +146,8 @@ function SortableFrame({
           )}
         </Box>
 
-        <CardContent sx={{ p: 1.5, bgcolor: "#fff", "&:last-child": { pb: 1.5 } }}>
-          <Typography noWrap sx={{ color: "#0f172a", fontWeight: 700, fontSize: 12, mb: 0.6 }}>
+        <CardContent sx={{ p: 1.5, bgcolor: "background.paper", "&:last-child": { pb: 1.5 } }}>
+          <Typography noWrap sx={{ color: "text.primary", fontWeight: 700, fontSize: 12, mb: 0.6 }}>
             {cap.label || `Frame ${idx + 1}`}
           </Typography>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mb: 1 }}>
@@ -153,12 +156,10 @@ function SortableFrame({
               sx={{
                 color:
                   cap.llm_status === "done"
-                    ? "#4caf50"
+                    ? "success.main"
                     : cap.llm_status === "processing"
-                      ? "#F26522"
-                      : cap.llm_status === "pending"
-                        ? "#64748b"
-                        : "#ef4444",
+                      ? "var(--ae-orange)"
+                      : "text.secondary",
                 fontWeight: 800,
                 fontSize: "10px",
               }}
@@ -181,8 +182,8 @@ function SortableFrame({
                 sx={{
                   px: 0.9,
                   py: 0.2,
-                  borderColor: "rgba(242,101,34,0.6)",
-                  color: "#F26522",
+                  borderColor: "var(--ae-border-active)",
+                  color: "var(--ae-orange)",
                   fontSize: "10px",
                   fontWeight: 800,
                   textTransform: "none",
@@ -191,16 +192,14 @@ function SortableFrame({
                 {isDescribing || cap.llm_status === "processing" ? <CircularProgress size={12} /> : "Generate"}
               </Button>
 
-              <IconButton size="small" onClick={() => onEdit(cap)} sx={{ color: "#8fa3c0", p: 0.3 }} disabled={!cap.image_url}>
-                <EditIcon sx={{ fontSize: 14 }} />
-              </IconButton>
+              {/* Single Edit Button handles both image and metadata now */}
             </Box>
           </Box>
           
           <Typography 
             variant="body2" 
             sx={{ 
-              color: "#475569", 
+              color: "text.secondary", 
               fontSize: '11px', 
               lineHeight: 1.5,
               overflow: 'hidden',
@@ -233,18 +232,36 @@ function SortableFrame({
                 />
               }
               label={cap.is_kept ? "Kept" : "Skip"}
-              sx={{ "& .MuiFormControlLabel-label": { fontSize: '10px', fontWeight: 600, color: cap.is_kept ? "#F26522" : "#94a3b8" } }}
+              sx={{ "& .MuiFormControlLabel-label": { fontSize: '10px', fontWeight: 600, color: cap.is_kept ? "var(--ae-orange)" : "text.secondary" } }}
             />
             
-            <Box sx={{ display: "flex", gap: 0.3 }}>
-              <Tooltip title={imageUrl ? "Crop/Annotate" : "Image unavailable"}>
-                <span>
-                  <IconButton size="small" onClick={() => onCrop(cap)} disabled={!imageUrl} sx={{ color: "#F26522", p: 0.4 }}>
-                    <CropIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </span>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<EditIcon sx={{ fontSize: 14 }} />}
+                onClick={() => onEdit(cap)}
+                disabled={!imageUrl}
+                sx={{ 
+                  bgcolor: "var(--ae-surface)", 
+                  color: "var(--ae-orange)", 
+                  fontSize: '10px', 
+                  fontWeight: 800,
+                  boxShadow: 'none',
+                  '&:hover': { bgcolor: "rgba(242,101,34,0.2)", boxShadow: 'none' }
+                }}
+              >
+                Edit
+              </Button>
+              <Tooltip title="Delete Frame">
+                <IconButton 
+                  size="small" 
+                  onClick={() => onDelete(cap.id)} 
+                  sx={{ color: "#ef4444", p: 0.5, border: '1px solid rgba(239,68,68,0.2)', borderRadius: 1.5 }}
+                >
+                  <DeleteIcon sx={{ fontSize: 16 }} />
+                </IconButton>
               </Tooltip>
-              <Tooltip title="Delete"><IconButton size="small" onClick={() => onDelete(cap.id)} sx={{ color: "#ef4444", p: 0.4 }}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton></Tooltip>
             </Box>
           </Box>
         </CardContent>
@@ -261,6 +278,8 @@ export default function ReviewEdit({
   onBack,
   token,
   apiBase,
+  sections = [],
+  refreshSections,
 }) {
   const [editingCapture, setEditingCapture] = useState(null);
   const [editDescription, setEditDescription] = useState("");
@@ -284,15 +303,27 @@ export default function ReviewEdit({
   const capturesRef = useRef(captures);
   const [describingCaptureIds, setDescribingCaptureIds] = useState({});
 
+  // Generation Logic
+  const [genDialogOpen, setGenDialogOpen] = useState(false);
+  const [genInstructions, setGenInstructions] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const hasDoc = sections && sections.length > 0;
+
   const authHeaders = { Authorization: `Bearer ${token}` };
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  useEffect(() => {
-    capturesRef.current = captures;
+  // Strictly sort captures by timestamp for sequential display and generation
+  const sortedCaptures = useMemo(() => {
+    return [...(captures || [])].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
   }, [captures]);
 
+  useEffect(() => {
+    capturesRef.current = sortedCaptures;
+  }, [sortedCaptures]);
+
   // Ordered IDs for sortable
-  const captureIds = useMemo(() => captures.map((c) => c.id), [captures]);
+  const captureIds = useMemo(() => sortedCaptures.map((c) => c.id), [sortedCaptures]);
 
   // Open edit dialog
   const openEdit = (cap) => {
@@ -380,31 +411,24 @@ export default function ReviewEdit({
     for (let i = 0; i < attempts; i += 1) {
       await refreshCaptures();
       await new Promise((r) => setTimeout(r, intervalMs));
-      const current = capturesRef.current.find((c) => c.id === capId);
+      const current = (capturesRef.current || []).find((c) => c.id === capId);
       if (current && (current.llm_status === "done" || current.llm_status === "error")) return;
     }
   };
 
   const generateDescriptionForCapture = async (capId) => {
     if (!capId || !projectId) return;
-    const currently = capturesRef.current.find((c) => c.id === capId);
+    const currently = (capturesRef.current || []).find((c) => c.id === capId);
     if (!currently || !currently.image_url) return;
     if (currently.llm_status === "processing") return;
 
-    if (describingCaptureIds[capId]) return;
     setDescribingCaptureIds((prev) => ({ ...prev, [capId]: true }));
-
     try {
       const res = await fetch(`${apiBase}/api/brd/captures/${capId}/describe`, {
         method: "POST",
         headers: authHeaders,
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || "Failed to start description");
-      }
-
-      // Live polling until this capture is done/error.
+      if (!res.ok) throw new Error("Failed to start description");
       await refreshAndWaitForCapture(capId);
     } catch (err) {
       console.error("Generate description failed:", err);
@@ -414,6 +438,33 @@ export default function ReviewEdit({
         delete next[capId];
         return next;
       });
+    }
+  };
+
+  const [batchDescrLoading, setBatchDescrLoading] = useState(false);
+  const generateAllDescriptions = async () => {
+    if (!projectId || batchDescrLoading) return;
+    setBatchDescrLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/captures/describe-all`, {
+        method: "POST",
+        headers: authHeaders,
+      });
+      if (!res.ok) throw new Error("Batch description failed");
+      
+      // Poll until all kept captures are done/error
+      let attempts = 45; // ~1.5 mins
+      while (attempts > 0) {
+        await refreshCaptures();
+        const pending = (capturesRef.current || []).filter(c => c.is_kept && (c.llm_status === "pending" || c.llm_status === "processing")).length;
+        if (pending === 0) break;
+        await new Promise(r => setTimeout(r, 2500));
+        attempts--;
+      }
+    } catch (err) {
+      console.error("Batch generate failed:", err);
+    } finally {
+      setBatchDescrLoading(false);
     }
   };
 
@@ -505,21 +556,59 @@ export default function ReviewEdit({
     }
   };
 
+  // Handle Generation
+  const triggerGenerate = async () => {
+    setIsGenerating(true);
+    setGenDialogOpen(false);
+    try {
+      const endpoint = hasDoc ? "regenerate" : "generate";
+      // Construct payload mimicking DocumentEditor's logic
+      const payload = hasDoc 
+        ? { sections: null, instruction: genInstructions } // Regenerate all with context
+        : { mode: "default", instruction: genInstructions };
+
+      const res = await fetch(`${apiBase}/api/brd/projects/${projectId}/${endpoint}`, {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Generation failed to start");
+
+      // Poll for status
+      const poll = setInterval(async () => {
+        const sRes = await fetch(`${apiBase}/api/brd/projects/${projectId}/status`, { headers: authHeaders });
+        if (sRes.ok) {
+          const s = await sRes.json();
+          if (s.status !== "generating") {
+            clearInterval(poll);
+            await refreshSections?.();
+            setIsGenerating(false);
+            onNext(); // Auto-proceed once done
+          }
+        }
+      }, 3000);
+    } catch (err) {
+      console.error("BRD Generation failed", err);
+      setIsGenerating(false);
+    }
+  };
+
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", bgcolor: "background.default", color: "text.primary" }}>
       {/* Toolbar */}
       <Box
         sx={{
           px: 3, py: 1.5,
           display: "flex", alignItems: "center", gap: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          borderBottom: "1px solid var(--ae-border)",
           flexShrink: 0,
         }}
       >
-        <Button startIcon={<ArrowBackIcon />} onClick={onBack} size="small" sx={{ color: "#8fa3c0" }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={onBack} size="small" sx={{ color: "text.secondary" }}>
           Back
         </Button>
-        <Typography variant="subtitle1" sx={{ color: "#e8edf5", fontWeight: 600, flex: 1 }}>
+        <Typography variant="subtitle1" sx={{ color: "text.primary !important", fontWeight: 700, flex: 1 }}>
           Review Frames — {keptCount} kept / {captures.length} total
         </Typography>
 
@@ -530,7 +619,7 @@ export default function ReviewEdit({
           disabled={uploading}
           size="small"
           variant="outlined"
-          sx={{ borderColor: "rgba(242,101,34,0.5)", color: "#F26522" }}
+          sx={{ borderColor: "var(--ae-orange)", color: "var(--ae-orange)" }}
         >
           Add Screenshot
         </Button>
@@ -540,26 +629,64 @@ export default function ReviewEdit({
           onClick={openVideoDialog}
           size="small"
           variant="outlined"
-          sx={{ borderColor: "rgba(31,56,100,0.45)", color: "#1F3864", bgcolor: "#fff" }}
+          sx={{ borderColor: "var(--ae-border)", color: "text.primary", bgcolor: "var(--ae-surface)" }}
         >
           Capture From Video
         </Button>
 
+        {keptCount > 0 && keptMissingDescCount > 0 && (
+          <Button
+            variant="contained"
+            color="success"
+            onClick={generateAllDescriptions}
+            disabled={batchDescrLoading || isGenerating}
+            size="small"
+            sx={{ fontWeight: 600, bgcolor: "success.main", "&:hover": { bgcolor: "success.dark" } }}
+            startIcon={batchDescrLoading ? <CircularProgress size={16} color="inherit" /> : null}
+          >
+            {batchDescrLoading ? `Generating (${keptMissingDescCount})...` : "Generate All Descriptions"}
+          </Button>
+        )}
+
         <Button
           variant="contained"
-          endIcon={<NavigateNextIcon />}
-          onClick={onNext}
-          disabled={keptCount === 0 || keptMissingDescCount > 0}
+          endIcon={isGenerating ? <CircularProgress size={16} color="inherit" /> : hasDoc ? <NavigateNextIcon /> : <AutoFixHighIcon />}
+          onClick={hasDoc ? onNext : () => setGenDialogOpen(true)}
+          disabled={keptCount === 0 || keptMissingDescCount > 0 || isGenerating}
           title={
             keptMissingDescCount > 0
               ? `Generate AI descriptions for ${keptMissingDescCount} kept frame(s) first.`
               : undefined
           }
           size="small"
-          sx={{ background: "linear-gradient(135deg, #F26522 0%, #e55a1b 100%)", fontWeight: 600 }}
+          sx={{ 
+            background: hasDoc 
+              ? "linear-gradient(135deg, #1F3864 0%, #172a4d 100%)" 
+              : "linear-gradient(135deg, #F26522 0%, #e55a1b 100%)", 
+            fontWeight: 700,
+            textTransform: 'none',
+            px: 3
+          }}
         >
-          Proceed to Document Editor
+          {isGenerating 
+             ? "Generating BRD..." 
+             : hasDoc 
+                ? "Proceed to Document Editor" 
+                : "Generate BRD"}
         </Button>
+
+        {hasDoc && (
+          <Button
+            variant="outlined"
+            onClick={() => setGenDialogOpen(true)}
+            disabled={isGenerating || keptMissingDescCount > 0}
+            size="small"
+            startIcon={<DescriptionIcon />}
+            sx={{ borderColor: "rgba(242,101,34,0.4)", color: "#F26522", fontWeight: 600 }}
+          >
+            Regenerate BRD
+          </Button>
+        )}
       </Box>
 
       {/* Frame Grid with DnD */}
@@ -567,17 +694,17 @@ export default function ReviewEdit({
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={captureIds} strategy={rectSortingStrategy}>
             <Grid container spacing={2}>
-              {captures.map((cap, idx) => (
+              {sortedCaptures.map((cap, idx) => (
                 <SortableFrame
                   key={cap.id}
                   cap={cap}
                   idx={idx}
                   apiBase={apiBase}
-                  onEdit={openEdit}
+                  onEdit={(c) => setImageEditorCap(c)}
                   onToggleKeep={handleToggleKeep}
                   onDelete={handleDeleteCapture}
                   onCrop={(c) => setImageEditorCap(c)}
-                  onPreview={setPreviewImage}
+                  onPreview={(url) => setImageEditorCap(sortedCaptures.find(c => `${apiBase}${c.image_url}` === url))}
                   onGenerateDescription={generateDescriptionForCapture}
                   isDescribing={!!describingCaptureIds[cap.id]}
                 />
@@ -587,56 +714,14 @@ export default function ReviewEdit({
         </DndContext>
       </Box>
 
-      {/* Edit Dialog */}
-      <Dialog
-        open={!!editingCapture}
-        onClose={() => setEditingCapture(null)}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{ sx: { bgcolor: "#112240", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 3 } }}
-      >
-        <DialogTitle sx={{ color: "#e8edf5", fontFamily: "'Syne', sans-serif" }}>
-          Edit Frame Details
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: "flex", gap: 3, mt: 1 }}>
-            {editingCapture?.image_url && (
-              <Box sx={{ flex: "0 0 280px" }}>
-                <img
-                  src={`${apiBase}${editingCapture.image_url}`}
-                  alt="Preview"
-                  style={{ width: "100%", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)" }}
-                />
-              </Box>
-            )}
-            <Box sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-              <TextField label="Label" value={editLabel} onChange={(e) => setEditLabel(e.target.value)} fullWidth size="small" />
-              <TextField label="Description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} multiline rows={4} fullWidth size="small" />
-              <TextField label="OCR Text" value={editOcr} onChange={(e) => setEditOcr(e.target.value)} multiline rows={4} fullWidth size="small" placeholder="Visible text on screen..." />
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setEditingCapture(null)} sx={{ color: "#8fa3c0" }}>Cancel</Button>
-          <Button
-            variant="contained"
-            startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
-            onClick={saveEdit}
-            disabled={saving}
-            sx={{ background: "linear-gradient(135deg, #F26522 0%, #e55a1b 100%)" }}
-          >
-            Save Changes
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Image Editor (Crop & Annotate) */}
+      {/* Universal Editor (Preview + Edit + Annotate) */}
       {imageEditorCap && (
         <ImageEditor
           open={!!imageEditorCap}
           onClose={() => setImageEditorCap(null)}
-          imageSrc={`${apiBase}${imageEditorCap.image_url}`}
-          captureId={imageEditorCap.id}
+          capture={imageEditorCap}
+          allCaptures={sortedCaptures}
+          onSwitchCapture={(newCap) => setImageEditorCap(newCap)}
           apiBase={apiBase}
           token={token}
           onSaved={() => {
@@ -646,23 +731,7 @@ export default function ReviewEdit({
         />
       )}
 
-      {/* Lightbox Preview */}
-      <Dialog
-        open={!!previewImage}
-        onClose={() => setPreviewImage(null)}
-        maxWidth="lg"
-        PaperProps={{ sx: { bgcolor: "transparent", boxShadow: "none", overflow: "hidden" } }}
-      >
-        <DialogContent sx={{ p: 0, position: "relative" }}>
-          {previewImage && (
-            <img
-              src={previewImage}
-              alt="Preview"
-              style={{ width: "100%", height: "auto", display: "block", borderRadius: 8 }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Lightbox Preview removed in favor of Universal Editor */}
 
       {/* Popup Video Player for Manual Capture */}
       <Dialog open={videoDialogOpen} onClose={() => setVideoDialogOpen(false)} maxWidth="lg" fullWidth>
@@ -725,6 +794,64 @@ export default function ReviewEdit({
         <DialogActions>
           <Button onClick={() => setCaptureConfirmOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={confirmCapturedFrame}>Yes, Add Frame</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* BRD Generation Prompt Dialog */}
+      <Dialog open={genDialogOpen} onClose={() => !isGenerating && setGenDialogOpen(false)} maxWidth="sm" fullWidth
+         PaperProps={{ sx: { bgcolor: "background.paper", border: '1px solid var(--ae-border)', borderRadius: 3 } }}>
+        <DialogTitle sx={{ color: "text.primary", display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+           <AutoFixHighIcon sx={{ color: '#F26522' }} />
+           {hasDoc ? "Regenerate BRD Document" : "Generate BRD Document"}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+           <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
+              Add high-level instructions for the AI (e.g. tone, detail level, or specific focus).
+           </Typography>
+           
+           <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+              <Button 
+                variant="outlined" size="small" 
+                onClick={() => setGenInstructions(prev => (prev ? prev + " " : "") + "Elaborate the process steps and descriptions in extensive detail.")}
+                sx={{ fontSize: '10px', color: 'text.secondary', borderColor: 'var(--ae-border)' }}
+              >
+                Elaborate
+              </Button>
+              <Button 
+                variant="outlined" size="small" 
+                onClick={() => setGenInstructions(prev => (prev ? prev + " " : "") + "Keep the BRD content very concise and professional.")}
+                sx={{ fontSize: '10px', color: 'text.secondary', borderColor: 'var(--ae-border)' }}
+              >
+                Shorten
+              </Button>
+           </Box>
+
+           <TextField
+             fullWidth
+             multiline rows={5}
+             placeholder="e.g. Focus on technical validations and detailed application details..."
+             value={genInstructions}
+             onChange={(e) => setGenInstructions(e.target.value)}
+             sx={{ 
+               '& .MuiInputBase-root': { color: '#fff', bgcolor: 'rgba(255,255,255,0.03)' },
+               '& .MuiInputLabel-root': { color: '#8fa3c0' }
+             }}
+           />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+           <Button onClick={() => setGenDialogOpen(false)} disabled={isGenerating} sx={{ color: "#8fa3c0" }}>Cancel</Button>
+           <Button 
+             variant="contained" 
+             onClick={triggerGenerate} 
+             disabled={isGenerating}
+             sx={{ 
+               background: "linear-gradient(135deg, #F26522 0%, #e55a1b 100%)",
+               fontWeight: 700,
+               px: 4
+             }}
+           >
+              {isGenerating ? "Processing..." : hasDoc ? "Start Regeneration" : "Generate BRD Now"}
+           </Button>
         </DialogActions>
       </Dialog>
     </Box>

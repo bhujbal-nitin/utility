@@ -129,7 +129,7 @@ export default function ExportManage({
   };
 
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", bgcolor: 'background.default', color: 'text.primary' }}>
       {/* Toolbar */}
       <Box
         sx={{
@@ -138,14 +138,14 @@ export default function ExportManage({
           display: "flex",
           alignItems: "center",
           gap: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          borderBottom: "1px solid var(--ae-border)",
           flexShrink: 0,
         }}
       >
-        <Button startIcon={<ArrowBackIcon />} onClick={onBack} size="small" sx={{ color: "#8fa3c0" }}>
+        <Button startIcon={<ArrowBackIcon />} onClick={onBack} size="small" sx={{ color: "text.secondary" }}>
           Back to Editor
         </Button>
-        <Typography variant="subtitle1" sx={{ color: "#e8edf5", fontWeight: 600, flex: 1 }}>
+        <Typography variant="subtitle1" sx={{ color: "text.primary", fontWeight: 600, flex: 1 }}>
           Export & Manage
         </Typography>
       </Box>
@@ -162,19 +162,19 @@ export default function ExportManage({
           <Paper
             sx={{
               p: 3,
-              bgcolor: "rgba(17,34,64,0.6)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              bgcolor: "var(--ae-surface)",
+              border: "1px solid var(--ae-border)",
               borderRadius: 3,
               mb: 3,
             }}
           >
             <Typography
               variant="h6"
-              sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "#e8edf5", mb: 0.5 }}
+              sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "text.primary", mb: 0.5 }}
             >
               Export BRD
             </Typography>
-            <Typography variant="body2" sx={{ color: "#8fa3c0", mb: 3 }}>
+            <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
               Download your BRD with {sections.length} sections, all images, and flow diagrams.
             </Typography>
 
@@ -189,14 +189,14 @@ export default function ExportManage({
                   sx={{
                     py: 2,
                     borderColor: "rgba(242,101,34,0.4)",
-                    color: "#e8edf5",
+                    color: "text.primary",
                     borderRadius: 2,
                     "&:hover": { borderColor: "#F26522", bgcolor: "rgba(242,101,34,0.05)" },
                   }}
                 >
                   <Box sx={{ textAlign: "left", ml: 1 }}>
                     <Typography sx={{ fontWeight: 600, fontSize: 14 }}>DOCX</Typography>
-                    <Typography sx={{ fontSize: 11, color: "#8fa3c0" }}>Microsoft Word format</Typography>
+                    <Typography sx={{ fontSize: 11, color: "text.secondary" }}>Microsoft Word format</Typography>
                   </Box>
                 </Button>
               </Grid>
@@ -209,15 +209,15 @@ export default function ExportManage({
                   disabled={exporting}
                   sx={{
                     py: 2,
-                    borderColor: "rgba(255,255,255,0.15)",
-                    color: "#e8edf5",
+                    borderColor: "var(--ae-border)",
+                    color: "text.primary",
                     borderRadius: 2,
-                    "&:hover": { borderColor: "#8fa3c0", bgcolor: "rgba(255,255,255,0.03)" },
+                    "&:hover": { borderColor: "text.secondary", bgcolor: "var(--ae-surface)" },
                   }}
                 >
                   <Box sx={{ textAlign: "left", ml: 1 }}>
                     <Typography sx={{ fontWeight: 600, fontSize: 14 }}>PDF</Typography>
-                    <Typography sx={{ fontSize: 11, color: "#8fa3c0" }}>Portable document</Typography>
+                    <Typography sx={{ fontSize: 11, color: "text.secondary" }}>Portable document</Typography>
                   </Box>
                 </Button>
               </Grid>
@@ -228,19 +228,19 @@ export default function ExportManage({
           <Paper
             sx={{
               p: 3,
-              bgcolor: "rgba(17,34,64,0.6)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              bgcolor: "var(--ae-surface)",
+              border: "1px solid var(--ae-border)",
               borderRadius: 3,
               mb: 3,
             }}
           >
             <Typography
               variant="h6"
-              sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "#e8edf5", mb: 0.5 }}
+              sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "text.primary", mb: 0.5 }}
             >
               Regenerate BRD
             </Typography>
-            <Typography variant="body2" sx={{ color: "#8fa3c0", mb: 2 }}>
+            <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
               Regenerate with specific changes or instructions. Manually-edited sections will be preserved.
             </Typography>
 
@@ -274,14 +274,14 @@ export default function ExportManage({
           <Paper
             sx={{
               p: 3,
-              bgcolor: "rgba(17,34,64,0.6)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              bgcolor: "var(--ae-surface)",
+              border: "1px solid var(--ae-border)",
               borderRadius: 3,
             }}
           >
             <Typography
               variant="h6"
-              sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "#e8edf5", mb: 2 }}
+              sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "text.primary", mb: 2 }}
             >
               BRD Summary
             </Typography>
@@ -294,16 +294,16 @@ export default function ExportManage({
                       alignItems: "center",
                       gap: 1,
                       py: 0.5,
-                      borderBottom: "1px solid rgba(255,255,255,0.03)",
+                      borderBottom: "1px solid var(--ae-border)",
                     }}
                   >
-                    <Typography sx={{ fontSize: 13, color: "#e8edf5", flex: 1 }}>
+                    <Typography sx={{ fontSize: 13, color: "text.primary", flex: 1 }}>
                       {sec.title}
                     </Typography>
                     <Chip
                       label={`v${sec.version}`}
                       size="small"
-                      sx={{ height: 18, fontSize: 10, bgcolor: "rgba(255,255,255,0.05)", color: "#8fa3c0" }}
+                      sx={{ height: 18, fontSize: 10, bgcolor: "var(--ae-surface)", color: "text.secondary" }}
                     />
                     {sec.is_manual_override && (
                       <Chip

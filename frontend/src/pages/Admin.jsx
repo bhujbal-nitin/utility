@@ -6,7 +6,7 @@ import axios from "axios";
 const ROLES = ["admin", "ba", "sales", "automation", "ae"];
 
 export default function Admin() {
-  const { api, user } = useAuth();
+  const { user } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -92,21 +92,21 @@ export default function Admin() {
             <CircularProgress sx={{ color: "#F26522" }} />
           </Box>
         ) : (
-          <TableContainer component={Paper} sx={{ background: "#112240", borderRadius: 2 }}>
+          <TableContainer component={Paper} sx={{ background: "background.paper", borderRadius: 2, border: '1px solid var(--ae-border)' }}>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ color: "#e8edf5", fontWeight: "bold" }}>Email</TableCell>
-                  <TableCell sx={{ color: "#e8edf5", fontWeight: "bold" }}>Current Roles</TableCell>
-                  <TableCell sx={{ color: "#e8edf5", fontWeight: "bold" }}>Status</TableCell>
-                  <TableCell sx={{ color: "#e8edf5", fontWeight: "bold" }}>Action</TableCell>
+                  <TableCell sx={{ color: "text.primary", fontWeight: "bold" }}>Email</TableCell>
+                  <TableCell sx={{ color: "text.primary", fontWeight: "bold" }}>Current Roles</TableCell>
+                  <TableCell sx={{ color: "text.primary", fontWeight: "bold" }}>Status</TableCell>
+                  <TableCell sx={{ color: "text.primary", fontWeight: "bold" }}>Action</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {users.map((u) => (
-                  <TableRow key={u.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                    <TableCell sx={{ color: "#8fa3c0" }}>{u.email}</TableCell>
-                    <TableCell sx={{ color: "#8fa3c0", textTransform: "capitalize" }}>{u.roles?.join(', ')}</TableCell>
+                  <TableRow key={u.id} sx={{ "&:last-child td, &:last-child th": { border: 0 }, "&:hover": { bgcolor: "var(--ae-surface)" } }}>
+                    <TableCell sx={{ color: "text.secondary" }}>{u.email}</TableCell>
+                    <TableCell sx={{ color: "text.secondary", textTransform: "capitalize" }}>{u.roles?.join(', ')}</TableCell>
                     <TableCell sx={{ color: u.is_approved ? "#4caf50" : "#ff9800", fontWeight: "bold" }}>
                       {u.is_approved ? "Approved" : "Pending"}
                     </TableCell>
@@ -116,7 +116,7 @@ export default function Admin() {
                         value={u.roles || []}
                         size="small"
                         onChange={(e) => handleRolesChange(u.id, typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
-                        sx={{ color: "white", ".MuiOutlinedInput-notchedOutline": { borderColor: "#506280" }, minWidth: "120px" }}
+                        sx={{ color: "text.primary", ".MuiOutlinedInput-notchedOutline": { borderColor: "var(--ae-border)" }, minWidth: "120px" }}
                       >
                         {ROLES.map(r => (
                           <MenuItem key={r} value={r} sx={{ textTransform: "capitalize" }}>

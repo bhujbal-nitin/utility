@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { Box, Typography, TextField, Button, CircularProgress, Container, Paper, Link } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
+import { useThemeMode } from "../context/ThemeContext";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
 
 export default function Login() {
+  const { mode } = useThemeMode();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -33,7 +35,9 @@ export default function Login() {
         width: "100vw",
         alignItems: "center",
         justifyContent: "center",
-        background: "radial-gradient(ellipse 80% 60% at 15% 10%, rgba(242,101,34,0.06) 0%, transparent 60%), #0a1628",
+        background: mode === 'light'
+          ? "radial-gradient(ellipse 80% 60% at 15% 10%, rgba(242,101,34,0.04) 0%, transparent 60%), #f8fafc"
+          : "radial-gradient(ellipse 80% 60% at 15% 10%, rgba(242,101,34,0.06) 0%, transparent 60%), #0a1628",
       }}
     >
       <Container maxWidth="xs">
@@ -44,9 +48,10 @@ export default function Login() {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            background: "#112240",
+            background: "background.paper",
             borderRadius: 3,
             borderTop: "4px solid #F26522",
+            border: "1px solid var(--ae-border)",
           }}
         >
           <Typography variant="h4" sx={{ mb: 1, fontWeight: "bold", color: "#F26522" }}>
@@ -75,7 +80,7 @@ export default function Login() {
               variant="outlined"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              sx={{ input: { color: "white" } }}
+              sx={{ input: { color: "text.primary" } }}
             />
             <TextField
               margin="normal"
@@ -89,7 +94,7 @@ export default function Login() {
               variant="outlined"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              sx={{ input: { color: "white" } }}
+              sx={{ input: { color: "text.primary" } }}
             />
             <Button
               type="submit"

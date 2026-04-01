@@ -158,6 +158,7 @@ class ExportService:
 
     async def export_docx(
         self,
+        project_id: str,
         project_name: str,
         sections: List[Dict],
         captures: List[Dict],
@@ -286,7 +287,8 @@ class ExportService:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"BRD_{safe_name}_{timestamp}.docx"
 
-        export_dir = os.path.join(self.exports_dir, safe_name)
+        # ALWAYS use project_id for folder to ensure reliable cleanup
+        export_dir = os.path.join(self.exports_dir, str(project_id))
         os.makedirs(export_dir, exist_ok=True)
         file_path = os.path.join(export_dir, filename)
 
@@ -296,6 +298,7 @@ class ExportService:
 
     async def export_docx_from_template(
         self,
+        project_id: str,
         project_name: str,
         sections: List[Dict],
         captures: List[Dict],
@@ -330,6 +333,9 @@ class ExportService:
             "section_13": "func_req",
             "section_14": "nonfunc_req",
             "section_15": "recommendations",
+            "functional_req": "func_req",
+            "non_functional_req": "nonfunc_req",
+            "recommendations": "recommendations"
         }
         for tag, key in numeric_mapping.items():
             # Ensure the tag is ALWAYS initialized in section_by_key
@@ -345,6 +351,34 @@ class ExportService:
             "project_name": project_name
         }
 
+        # TOC Update on Open logic
+        try:
+            element = doc.settings.element.find(qn("w:updateFields"))
+            if element is None:
+                update_fields = OxmlElement("w:updateFields")
+                update_fields.set(qn("w:val"), "true")
+                doc.settings.element.append(update_fields)
+        except Exception:
+            pass
+
+        # EXTRACTION: Parse structured metadata from applications_involved (Section 4 Table)
+        summary_content = section_by_key.get("applications_involved", "")
+        if summary_content:
+            try:
+                for line in summary_content.split("\n"):
+                    if ":" in line:
+                        k, v = line.split(":", 1)
+                        # Remove markdown bullets, backticks, and asterisks (bolding) to ensure exact match with tag names
+                        k_clean = re.sub(r"^[-*\s]+", "", k).replace("`", "").replace('"', "").replace("'", "").replace("*", "").strip().lower()
+                        v_clean = v.replace("`", "").replace("*", "").strip()
+                        if k_clean:
+                            summary_map[k_clean] = v_clean
+                
+                # Clear the raw text so it doesn't overwrite the entire template table as a raw markdown block
+                section_by_key["applications_involved"] = ""
+            except Exception as ex:
+                logger.warning(f"Metadata extraction failed: {ex}")
+
         # 4. Process all paragraphs and tables for [[tag]]
         async def process_para(p):
             txt = p.text or ""
@@ -357,6 +391,26 @@ class ExportService:
                 # Map [[section_x_content]] or [[internal_key_content]]
                 if "content" in clean_tag:
                     key = clean_tag.replace("_content", "")
+                    
+                    # Try numeric mapping first
+                    numeric_mapping = {
+                        "section_1": "process_summary",
+                        "section_4": "applications_involved",
+                        "section_5": "feasibility_observations",
+                        "section_6": "io_details",
+                        "section_7": "flow_existing",
+                        "section_8": "flow_proposed",
+                        "section_9": "process_detail",
+                        "section_10": "validations",
+                        "section_11": "exceptions",
+                        "section_12": "rules",
+                        "section_13": "func_req",
+                        "section_14": "nonfunc_req",
+                        "section_15": "recommendations"
+                    }
+                    if key in numeric_mapping:
+                        key = numeric_mapping[key]
+                        
                     content = section_by_key.get(key) or ""
                     
                     if content.strip():
@@ -377,12 +431,33 @@ class ExportService:
                     self._add_toc_field(p)
                 else:
                     # Check if internal key matches directly (no _content suffix)
-                    if clean_tag in section_by_key:
-                        content = section_by_key[clean_tag]
+                    # Also try numeric mapping for direct tags [[section_13]]
+                    key = clean_tag
+                    numeric_mapping = {
+                        "section_12": "rules",
+                        "section_13": "func_req",
+                        "section_15": "recommendations"
+                    }
+                    if key in numeric_mapping:
+                        key = numeric_mapping[key]
+
+                    if key in section_by_key:
+                        content = section_by_key[key]
                         p.text = p.text.replace(full_tag, "")
                         await self._render_blocks_after_para(doc, p, content, captures)
                     else:
                         p.text = p.text.replace(full_tag, "-")
+
+        # 5. Robust Final Pass for [[TOC]] and specialized tags
+        for p in list(doc.paragraphs):
+            full_text = "".join(r.text for r in p.runs)
+            # Match variations like [[TOC]], [[toc]], [[ TOC ]]
+            if re.search(r"\[\[\s*TOC\s*\]\]", full_text, re.IGNORECASE):
+                # Wipe existing runs safely and insert TOC field
+                for r in p.runs:
+                    r.text = ""
+                p.text = "" # Clears artifacts
+                self._add_toc_field(p)
 
         for p in list(doc.paragraphs):
             await process_para(p)
@@ -397,7 +472,8 @@ class ExportService:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"BRD_{safe_name}_{timestamp}.docx"
         
-        export_dir = os.path.join(self.exports_dir, safe_name)
+        # ALWAYS use project_id for folder to ensure reliable cleanup
+        export_dir = os.path.join(self.exports_dir, str(project_id))
         os.makedirs(export_dir, exist_ok=True)
         file_path = os.path.join(export_dir, filename)
         
@@ -407,6 +483,7 @@ class ExportService:
 
     async def _render_blocks_after_para(self, doc: Document, p, content: str, captures: List[Dict]):
         """Render markdown blocks after a specific paragraph in template-based export."""
+        content = self._sanitize_markdown(content)
         insertion_point = p._p
         
         # Split content into blocks (para, list, table, image_ref, mermaid)
@@ -436,10 +513,21 @@ class ExportService:
                 try:
                     img_bytes = await self._render_mermaid(mermaid_code)
                     if img_bytes:
+                        from PIL import Image as PILImage
+                        img = PILImage.open(io.BytesIO(img_bytes))
+                        w, h = img.size
+                        aspect = h / w
+
                         new_p = doc.add_paragraph()
                         new_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         run = new_p.add_run()
-                        run.add_picture(io.BytesIO(img_bytes), width=Inches(5.2))
+                        
+                        # SMART SCALING: Fit to width unless height is the bottleneck
+                        if (6.2 * aspect) > 8.8:
+                            run.add_picture(io.BytesIO(img_bytes), height=Inches(8.8))
+                        else:
+                            run.add_picture(io.BytesIO(img_bytes), width=Inches(6.2))
+                        
                         insertion_point.addnext(new_p._p)
                         insertion_point = new_p._p
                 except Exception as e:
@@ -464,10 +552,21 @@ class ExportService:
                 try:
                     img_bytes = await self._render_mermaid(mermaid_code)
                     if img_bytes:
+                        from PIL import Image as PILImage
+                        img = PILImage.open(io.BytesIO(img_bytes))
+                        w, h = img.size
+                        aspect = h / w
+
                         new_p = doc.add_paragraph()
                         new_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                         run = new_p.add_run()
-                        run.add_picture(io.BytesIO(img_bytes), width=Inches(5.2))
+                        
+                        # SMART SCALING: Fit to width unless height is the bottleneck
+                        if (6.2 * aspect) > 8.5:
+                            run.add_picture(io.BytesIO(img_bytes), height=Inches(8.5))
+                        else:
+                            run.add_picture(io.BytesIO(img_bytes), width=Inches(6.2))
+
                         insertion_point.addnext(new_p._p)
                         insertion_point = new_p._p
                 except Exception as e:
@@ -475,11 +574,11 @@ class ExportService:
                 continue
 
             # 2. [IMAGE_REF] Resolution (handles mid-line or multiple)
-            if "[IMAGE_REF" in line:
-                # Support variant: [IMAGE_REF:id] or [IMAGE_REF: id]
-                parts = re.split(r"(\[IMAGE_REF:?\s*[^\]\s]+\])", line)
+            if "[IMAGE_REF" in line or "[IMAGE\_REF" in line:
+                # Handles variations like [IMAGE_REF:id], [IMAGE\_REF:id], \[IMAGE\_REF...
+                parts = re.split(r"(\\?\[IMAGE[\\_]*REF:?\s*[^\]\s]+\])", line)
                 for part in parts:
-                    img_match = re.search(r"\[IMAGE_REF:?\s*([^\]\s]+)\]", part)
+                    img_match = re.search(r"\\?\[IMAGE[\\_]*REF:?\s*([^\]\s]+)\]", part)
                     if img_match:
                         cap_id = img_match.group(1).strip()
                         img_path = self._find_capture_image(cap_id, captures)
@@ -493,6 +592,7 @@ class ExportService:
                                 insertion_point.addnext(new_p._p)
                                 insertion_point = new_p._p
                                 
+                                # Add Caption
                                 cap = next((c for c in captures if c.get("id") == cap_id), None)
                                 if cap:
                                     cap_p = doc.add_paragraph()
@@ -504,14 +604,16 @@ class ExportService:
                                     insertion_point.addnext(cap_p._p)
                                     insertion_point = cap_p._p
                             except Exception as e:
-                                logger.error(f"Failed to embed capture {cap_id}: {type(e).__name__}: {e}", exc_info=True)
-                                new_p = doc.add_paragraph(f"[Image: {cap_id} - Error embedding]")
-                                insertion_point.addnext(new_p._p)
-                                insertion_point = new_p._p
+                                logger.error(f"Failed to embed capture {cap_id}: {e}")
                         else:
-                            logger.warning(f"Capture image not found or empty: {cap_id} (resolved path: {img_path})")
-                    elif part.strip():
-                        # Render text part
+                            # Placeholder for missing asset
+                            logger.warning(f"Capture image not found: {cap_id} (path: {img_path})")
+                            np = doc.add_paragraph(f"[Image: {cap_id} - Missing asset]")
+                            np.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            insertion_point.addnext(np._p)
+                            insertion_point = np._p
+                    elif part.strip() and part.strip() != "\\":
+                        # Render actual text parts only
                         new_p = doc.add_paragraph()
                         self._add_run_with_markdown(new_p, part.strip())
                         insertion_point.addnext(new_p._p)
@@ -559,34 +661,50 @@ class ExportService:
             insertion_point = new_p._p
             i += 1
 
-    def _add_run_with_markdown(self, paragraph, text):
-        """Simple inline markdown parser for bold (**) and italic (* / _)"""
+    def _add_run_with_markdown(self, paragraph, text, force_underline=False):
+        """Robust inline markdown parser for bold, italic, and underline"""
         text = text or ""
-        # Normalize markdown links for DOCX output.
+        # 0. Normalize markdown links for DOCX output.
         text = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r"\1 (\2)", text)
 
-        # Split by bold markers
-        parts = re.split(r"(\*\*.*?\*\*)", text)
+        # 1. Handle Underline FIRST (as a recursive wrapper)
+        parts = re.split(r"(<u>.*?</u>)", text, flags=re.IGNORECASE)
         for part in parts:
-            if part.startswith("**") and part.endswith("**"):
-                # Bold
-                content = part[2:-2]
+            if not part: continue
+            if part.lower().startswith("<u>") and part.lower().endswith("</u>"):
+                content = part[3:-4]
+                self._add_run_with_markdown(paragraph, content, force_underline=True)
+                continue
+            
+            # 2. Handle Bold-Italic (***), Bold (**), Italic (* / _)
+            # Sorted by length descending to prevent greedy mismatch of stars
+            regex = r"(\*\*\*.*?\*\*\*|\*\*.*?\*\*|\*.*?\*|___.*?___|__.*?__|__.*?_)"
+            sub_parts = re.split(regex, part)
+            for s in sub_parts:
+                if not s: continue
+                
+                is_bold = False
+                is_italic = False
+                content = s
+                
+                if s.startswith("***") and s.endswith("***"):
+                    content = s[3:-3]
+                    is_bold = True
+                    is_italic = True
+                elif s.startswith("**") and s.endswith("**"):
+                    content = s[2:-2]
+                    is_bold = True
+                elif (s.startswith("*") and s.endswith("*")) or (s.startswith("_") and s.endswith("_")):
+                    content = s[1:-1]
+                    is_italic = True
+                elif s.startswith("__") and s.endswith("__"):
+                    content = s[2:-2]
+                    is_italic = True
+                
                 run = paragraph.add_run(content)
-                run.font.bold = True
-            else:
-                # Normal or Italic
-                inner_parts = re.split(r"(\*.*?\*|__.*?__|_.*?_)", part)
-                for i_part in inner_parts:
-                    if (i_part.startswith("*") and i_part.endswith("*")) or (i_part.startswith("_") and i_part.endswith("_")):
-                        content = i_part[1:-1]
-                        run = paragraph.add_run(content)
-                        run.font.italic = True
-                    elif i_part.startswith("__") and i_part.endswith("__"):
-                        content = i_part[2:-2]
-                        run = paragraph.add_run(content)
-                        run.font.italic = True
-                    else:
-                        paragraph.add_run(i_part)
+                if is_bold: run.font.bold = True
+                if is_italic: run.font.italic = True
+                if force_underline: run.font.underline = True
 
     async def _render_mermaid(self, code: str) -> Optional[bytes]:
         """Convert Mermaid to PNG with hardened sanitization and fallback chain."""
@@ -594,20 +712,19 @@ class ExportService:
             code = self._sanitize_mermaid_code(code)
             code_bytes = code.encode("utf-8")
 
-            # Primary: mermaid.ink (pako + base64)
+            # HARDENING: We use Kroki API which is much more reliable for large Mermaid diagrams
+            # Kroki expects base64_urlsafe(zlib.compress(code_bytes, 9))
             compressed = zlib.compress(code_bytes, 9)
-            pako_b64 = base64.urlsafe_b64encode(compressed).decode("utf-8")
-            pako_url = f"https://mermaid.ink/img/pako:{pako_b64}"
-            base64_str = base64.b64encode(code_bytes).decode("utf-8")
-            base64_url = f"https://mermaid.ink/img/{base64_str}"
+            kroki_payload = base64.urlsafe_b64encode(compressed).decode("utf-8")
+            kroki_url = f"https://kroki.io/mermaid/png/{kroki_payload}"
 
             async with httpx.AsyncClient(follow_redirects=True) as client:
-                for url in [pako_url, base64_url]:
+                for url in [kroki_url]:
                     try:
                         res = await client.get(url, timeout=25.0)
                         if res.status_code == 200 and res.content:
                             return res.content
-                        logger.warning("Mermaid remote render returned %s", res.status_code)
+                        logger.warning("Mermaid remote render (%s) returned %s", url[:40], res.status_code)
                     except Exception as req_err:
                         logger.warning("Mermaid remote render failed: %s", req_err)
 
@@ -738,10 +855,6 @@ class ExportService:
 
     def _add_toc_field(self, paragraph):
         """Native Word TOC field."""
-        run = paragraph.add_run("[Table of Contents - Right-click to Update]")
-        run.font.italic = True
-        run.font.color.rgb = AE_GRAY
-        
         fldChar1 = OxmlElement("w:fldChar")
         fldChar1.set(qn("w:fldCharType"), "begin")
         paragraph._p.append(fldChar1)
@@ -755,12 +868,27 @@ class ExportService:
         fldChar2.set(qn("w:fldCharType"), "separate")
         paragraph._p.append(fldChar2)
 
+        # Move placeholder INSIDE the separate/end block
+        run = paragraph.add_run("[Table of Contents - Right-click to Update]")
+        run.font.italic = True
+        run.font.color.rgb = AE_GRAY
+
         fldChar3 = OxmlElement("w:fldChar")
         fldChar3.set(qn("w:fldCharType"), "end")
         paragraph._p.append(fldChar3)
 
+    def _sanitize_markdown(self, text: str) -> str:
+        """Strip AI code block wrappers (```markdown ... ```)"""
+        if not text: return ""
+        # Remove start tag
+        text = re.sub(r"^```[a-zA-Z]*\n?", "", text, flags=re.MULTILINE)
+        # Remove end tag
+        text = re.sub(r"```\s*$", "", text, flags=re.MULTILINE)
+        return text.strip()
+
     def _render_content_to_docx(self, doc: Document, content: str, captures: List[Dict]):
         """Render markdown-ish content into DOCX paragraphs, tables, and images."""
+        content = self._sanitize_markdown(content)
         lines = content.split("\n")
         i = 0
         while i < len(lines):
@@ -779,7 +907,7 @@ class ExportService:
                                 img_buf = self._normalize_image_for_docx(img_path)
                                 p = doc.add_paragraph()
                                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                                p.add_run().add_picture(img_buf, width=Inches(6.0))
+                                p.add_run().add_picture(img_buf, width=Inches(6.2))
                                 cap = next((c for c in captures if c.get("id") == cap_id), None)
                                 if cap:
                                     cap_p = doc.add_paragraph()
@@ -994,6 +1122,7 @@ class ExportService:
 
     async def export_pdf(
         self,
+        project_id: str,
         project_name: str,
         sections: List[Dict],
         captures: List[Dict],
@@ -1008,7 +1137,7 @@ class ExportService:
         """
         # Canonical materialization first.
         try:
-            docx_path = await self.export_docx_from_template(project_name, sections, captures, project_meta)
+            docx_path = await self.export_docx_from_template(project_id, project_name, sections, captures, project_meta)
             pdf_candidate = os.path.splitext(docx_path)[0] + ".pdf"
             if self._convert_docx_to_pdf_best_effort(docx_path, pdf_candidate):
                 logger.info("PDF exported via canonical DOCX conversion: %s", pdf_candidate)
@@ -1022,7 +1151,8 @@ class ExportService:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"BRD_{safe_name}_{timestamp}.pdf"
 
-        export_dir = os.path.join(self.exports_dir, safe_name)
+        # ALWAYS use project_id for folder to ensure reliable cleanup
+        export_dir = os.path.join(self.exports_dir, str(project_id))
         os.makedirs(export_dir, exist_ok=True)
         file_path = os.path.join(export_dir, filename)
 

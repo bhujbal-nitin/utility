@@ -100,13 +100,13 @@ export default function WelcomeScreen() {
             fontFamily: "'Syne', sans-serif",
             fontWeight: 700,
             fontSize: { xs: "26px", md: "36px" },
-            color: "#fff",
+            color: "text.primary",
             lineHeight: 1.18,
             letterSpacing: "-0.8px",
           }}
         >
           What would you like to{" "}
-          <Box component="span" sx={{ color: "#F26522" }}>
+          <Box component="span" sx={{ color: "var(--ae-orange)" }}>
             automate
           </Box>{" "}
           today?
@@ -116,7 +116,7 @@ export default function WelcomeScreen() {
         <Typography
           sx={{
             fontSize: "14px",
-            color: "#8fa3c0",
+            color: "text.secondary",
             lineHeight: 1.6,
             maxWidth: 420,
           }}
@@ -135,14 +135,14 @@ export default function WelcomeScreen() {
                 fontFamily: "'Syne', sans-serif",
                 fontSize: "15px",
                 fontWeight: 800,
-                color: "#fff",
+                color: "text.primary",
                 letterSpacing: "-0.2px",
                 mb: 0.4,
               }}
             >
               {tool.label}
             </Typography>
-            <Typography sx={{ fontSize: "12.5px", color: "#8fa3c0", lineHeight: 1.55 }}>
+            <Typography sx={{ fontSize: "12.5px", color: "text.secondary", lineHeight: 1.55 }}>
               {tool.description}
             </Typography>
           </Box>

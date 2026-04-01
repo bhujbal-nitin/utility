@@ -90,36 +90,58 @@ export default function UploadCapture({
   }, [projectId, token, apiBase]);
 
 
-  // Poll for capture updates
+  // Poll for capture updates — using recursive timeout for better async control
+  const statusPollRef = useRef(null);
   const startPolling = useCallback(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
+    if (statusPollRef.current) clearTimeout(statusPollRef.current);
     if (pollStopTimeoutRef.current) clearTimeout(pollStopTimeoutRef.current);
-    pollRef.current = setInterval(async () => {
-      await refreshCaptures();
+
+    const poll = async () => {
+      if (!projectId || !token || canceling) return;
+      
       try {
-        if (!projectId || !token) return;
+        // Refresh captures to show live progress in Step 1
+        await refreshCaptures();
+
         const statusRes = await fetch(`${apiBase}/api/brd/projects/${projectId}/status`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!statusRes.ok) return;
-        const statusData = await statusRes.json();
-        const videosProcessing = statusData?.videos?.processing ?? 0;
-        if (videosProcessing === 0) {
-          if (pollRef.current) clearInterval(pollRef.current);
-          pollRef.current = null;
-          setCaptureProcessing(false);
-          setProcessingStatus("Frame capture complete. AI description is on-demand in Step 2.");
+        
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          const videosProcessing = statusData?.videos?.processing ?? 0;
+          
+          // Also refresh sidebar meta (ready status)
+          await loadAssets();
+
+          if (videosProcessing === 0) {
+            // Processing done
+            await Promise.all([refreshCaptures(), loadAssets()]);
+            setCaptureProcessing(false);
+            setProcessingStatus("Frame capture complete. AI description is on-demand in Step 2.");
+            statusPollRef.current = null;
+            return;
+          }
         }
       } catch (e) {
-        // Ignore status poll errors; capture polling will still refresh frames.
+        console.error("Polling error", e);
       }
-    }, 3000);
+      
+      // Schedule next run
+      if (!canceling) {
+        statusPollRef.current = setTimeout(poll, 4000);
+      }
+    };
 
-    // Stop after 5 minutes
+    // Immediate first run
+    poll();
+
+    // Safety timeout to prevent infinite polling (7 minutes for large videos)
     pollStopTimeoutRef.current = setTimeout(() => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    }, 300000);
-  }, [refreshCaptures, projectId, token, apiBase]);
+      if (statusPollRef.current) clearTimeout(statusPollRef.current);
+      setCaptureProcessing(false);
+    }, 420000);
+  }, [refreshCaptures, loadAssets, projectId, token, apiBase, canceling]);
 
   const uiBusy = uploading || captureProcessing;
 
@@ -157,9 +179,9 @@ export default function UploadCapture({
   }, [loadAssets]);
 
   const statusIcon = (status) => {
-    if (status === "done") return <CheckCircleIcon sx={{ color: "#4caf50", fontSize: 16 }} />;
-    if (status === "processing" || status === "pending") return <HourglassTopIcon sx={{ color: "#F26522", fontSize: 16 }} />;
-    return <ErrorOutlineIcon sx={{ color: "#f44336", fontSize: 16 }} />;
+    if (status === "done") return <CheckCircleIcon sx={{ color: "success.main", fontSize: 16 }} />;
+    if (status === "processing" || status === "pending") return <HourglassTopIcon sx={{ color: "var(--ae-orange)", fontSize: 16 }} />;
+    return <ErrorOutlineIcon sx={{ color: "error.main", fontSize: 16 }} />;
   };
 
   // Create project logic (restored/refined)
@@ -389,7 +411,7 @@ export default function UploadCapture({
         sx={{
           width: 420,
           flexShrink: 0,
-          borderRight: "1px solid rgba(255,255,255,0.06)",
+          borderRight: "1px solid var(--ae-border)",
           overflowY: "auto",
           p: 3,
           display: "flex",
@@ -397,7 +419,7 @@ export default function UploadCapture({
           gap: 2.5,
         }}
       >
-        <Typography variant="h6" sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "#e8edf5" }}>
+        <Typography variant="h6" sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "text.primary" }}>
           {projectId ? "Add Video Call" : "New BRD Project"}
         </Typography>
 
@@ -410,7 +432,7 @@ export default function UploadCapture({
         )}
 
         <Box>
-          <Typography variant="caption" sx={{ color: "#8fa3c0", mb: 1, display: "block" }}>
+          <Typography variant="caption" sx={{ color: "text.secondary", mb: 1, display: "block" }}>
             Ingestion Mode
           </Typography>
           <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
@@ -440,7 +462,7 @@ export default function UploadCapture({
             </Button>
           </Box>
           {ingestionMode === "video_only" && (
-            <Typography variant="caption" sx={{ color: "#8fa3c0", mt: 0.8, display: "block" }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", mt: 0.8, display: "block" }}>
               Video-only mode starts capture/description immediately. You can upload transcript later for higher BRD accuracy.
             </Typography>
           )}
@@ -449,14 +471,14 @@ export default function UploadCapture({
         {/* Video Selection */}
         {ingestionMode !== "transcript_only" && (
         <Box>
-          <Typography variant="caption" sx={{ color: "#8fa3c0", mb: 1, display: "block" }}>Select Video Walkthrough</Typography>
+          <Typography variant="caption" sx={{ color: "text.secondary", mb: 1, display: "block" }}>Select Video Walkthrough</Typography>
           <input ref={videoInputRef} type="file" accept="video/*" hidden onChange={(e) => setVideoFile(e.target.files[0])} />
           <Button
             variant="outlined"
             fullWidth
             startIcon={<VideoFileIcon />}
             onClick={() => videoInputRef.current?.click()}
-            sx={{ py: 1.5, borderColor: videoFile ? "#4caf50" : "rgba(242,101,34,0.4)", color: videoFile ? "#4caf50" : "#F26522" }}
+            sx={{ py: 1.5, borderColor: videoFile ? "#4caf50" : "var(--ae-orange)", color: videoFile ? "#4caf50" : "var(--ae-orange)" }}
           >
             {videoFile ? videoFile.name : "Choose Video"}
           </Button>
@@ -466,7 +488,7 @@ export default function UploadCapture({
         {/* Transcript Area */}
         {ingestionMode !== "video_only" && (
         <Box>
-          <Typography variant="caption" sx={{ color: "#8fa3c0", mb: 1, display: "block" }}>Transcript (Paste or Upload File)</Typography>
+          <Typography variant="caption" sx={{ color: "text.secondary", mb: 1, display: "block" }}>Transcript (Paste or Upload File)</Typography>
           <TextField
             multiline
             rows={4}
@@ -496,7 +518,7 @@ export default function UploadCapture({
 
         {projectId && (
           <Box>
-            <Typography variant="caption" sx={{ color: "#8fa3c0", mb: 1, display: "block" }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", mb: 1, display: "block" }}>
               Additional BRD Supporting File (PDF/DOCX/TXT)
             </Typography>
             <input
@@ -511,7 +533,7 @@ export default function UploadCapture({
               fullWidth
               startIcon={<CloudUploadIcon />}
               onClick={() => supportingFileInputRef.current?.click()}
-              sx={{ mb: 1, borderColor: "rgba(255,255,255,0.2)", color: "#8fa3c0" }}
+              sx={{ mb: 1, borderColor: "var(--ae-border)", color: "text.secondary" }}
             >
               {supportingFile ? supportingFile.name : "Select Supporting File"}
             </Button>
@@ -520,7 +542,7 @@ export default function UploadCapture({
               fullWidth
               disabled={!supportingFile || uiBusy || canceling}
               onClick={uploadSupportingFile}
-              sx={{ background: "#1F3864", fontWeight: 700 }}
+              sx={{ background: "var(--ae-navy-mid)", color: "#fff", fontWeight: 700 }}
             >
               Add to Project Assets
             </Button>
@@ -558,10 +580,10 @@ export default function UploadCapture({
         {projectId && (
           <>
             <Divider sx={{ opacity: 0.2 }} />
-            <Typography variant="caption" sx={{ color: "#8fa3c0", fontWeight: 700 }}>
+            <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 800 }}>
               Project Assets
             </Typography>
-            <List dense sx={{ maxHeight: 220, overflowY: "auto", bgcolor: "rgba(255,255,255,0.02)", borderRadius: 1, border: "1px solid rgba(255,255,255,0.06)" }}>
+            <List dense sx={{ maxHeight: 220, overflowY: "auto", bgcolor: "var(--ae-surface)", borderRadius: 1, border: "1px solid var(--ae-border)" }}>
               {(assetList.videos || []).map((v) => (
                 <ListItem
                   key={v.id}
@@ -659,7 +681,7 @@ export default function UploadCapture({
         ) : (
           <>
             <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-              <Typography variant="subtitle1" sx={{ color: "#e8edf5", fontWeight: 600 }}>
+              <Typography variant="subtitle1" sx={{ color: "#496288ff", fontWeight: 600 }}>
                 Captured Frames ({captures.length})
               </Typography>
               <Tooltip title="Refresh captures">
@@ -805,14 +827,36 @@ export default function UploadCapture({
               (uploading ? "Uploading files..." : "Cropping + queuing frames...")}
           </Typography>
           {uiBusy && !canceling ? (
-            <Button
-              variant="contained"
-              color="error"
-              onClick={stopAndRevert}
-              sx={{ px: 4, py: 1.4, borderRadius: 2, fontWeight: 900 }}
-            >
-              Stop & Revert
-            </Button>
+            <Box sx={{ display: "flex", gap: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  loadAssets();
+                  refreshCaptures();
+                  // Check status once
+                  fetch(`${apiBase}/api/brd/projects/${projectId}/status`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  })
+                    .then(r => r.json())
+                    .then(d => {
+                      if (d.videos?.processing === 0) {
+                        setCaptureProcessing(false);
+                      }
+                    });
+                }}
+                sx={{ color: "#fff", borderColor: "rgba(255,255,255,0.2)", borderRadius: 2 }}
+              >
+                Check Status
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={stopAndRevert}
+                sx={{ px: 4, py: 1.4, borderRadius: 2, fontWeight: 900 }}
+              >
+                Stop & Revert
+              </Button>
+            </Box>
           ) : (
             <Typography sx={{ color: "#8fa3c0", fontSize: 12 }}>
               Reverting...

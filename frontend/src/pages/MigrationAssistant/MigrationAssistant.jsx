@@ -100,8 +100,8 @@ const MigrationOptionCard = ({ icon: Icon, title, description, features, onClick
         <Card
             onClick={onClick}
             sx={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--ae-surface)",
+                border: "1px solid var(--ae-border)",
                 borderRadius: "16px",
                 cursor: "pointer",
                 transition: "all 0.22s cubic-bezier(0.4,0,0.2,1)",
@@ -111,14 +111,14 @@ const MigrationOptionCard = ({ icon: Icon, title, description, features, onClick
                     to: { opacity: 1, transform: "translateY(0)" },
                 },
                 "&:hover": {
-                    background: "rgba(255,255,255,0.06)",
-                    borderColor: "rgba(242,101,34,0.45)",
+                    background: "var(--ae-surface-hover)",
+                    borderColor: "var(--ae-orange)",
                     transform: "translateY(-4px)",
-                    boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+                    boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
                     "& .migration-arrow": {
                         opacity: 1,
                         transform: "translateX(0)",
-                        color: "#F26522",
+                        color: "var(--ae-orange)",
                     },
                 },
             }}
@@ -134,7 +134,7 @@ const MigrationOptionCard = ({ icon: Icon, title, description, features, onClick
                                         fontFamily: "'Syne', sans-serif",
                                         fontSize: "18px",
                                         fontWeight: 700,
-                                        color: "#fff",
+                                        color: "text.primary",
                                         letterSpacing: "-0.3px",
                                     }}
                                 >
@@ -144,7 +144,7 @@ const MigrationOptionCard = ({ icon: Icon, title, description, features, onClick
                             <Typography
                                 sx={{
                                     fontSize: "13px",
-                                    color: "#8fa3c0",
+                                    color: "text.secondary",
                                     lineHeight: 1.6,
                                     mb: 1.5,
                                 }}
@@ -158,9 +158,9 @@ const MigrationOptionCard = ({ icon: Icon, title, description, features, onClick
                                         label={feature}
                                         size="small"
                                         sx={{
-                                            background: "rgba(255,255,255,0.04)",
-                                            border: "1px solid rgba(255,255,255,0.07)",
-                                            color: "#506280",
+                                            background: "var(--ae-surface)",
+                                            border: "1px solid var(--ae-border)",
+                                            color: "text.secondary",
                                             fontSize: "10px",
                                             fontWeight: 500,
                                             height: "22px",
@@ -178,7 +178,7 @@ const MigrationOptionCard = ({ icon: Icon, title, description, features, onClick
                                 alignSelf: "center",
                             }}
                         >
-                            <ArrowForwardIcon sx={{ fontSize: 20, color: "#F26522" }} />
+                            <ArrowForwardIcon sx={{ fontSize: 20, color: "var(--ae-orange)" }} />
                         </Box>
                     </Box>
                 </CardContent>
@@ -199,7 +199,8 @@ const AELogoHero = () => (
             alignItems: "center",
             justifyContent: "center",
             mb: 2,
-            boxShadow: "0 10px 30px rgba(242,101,34,0.3)"
+            boxShadow: "0 10px 30px rgba(242,101,34,0.3)",
+            border: "1px solid rgba(255,255,255,0.1)"
         }}
     >
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
@@ -287,13 +288,13 @@ export default function MigrationHomePage({ tool, onBack }) {
                         sx={{
                             width: 32,
                             height: 32,
-                            border: "1px solid rgba(255,255,255,0.07)",
+                            border: "1px solid var(--ae-border)",
                             borderRadius: "8px",
-                            background: "rgba(255,255,255,0.04)",
-                            color: "#8fa3c0",
+                            background: "var(--ae-surface)",
+                            color: "text.secondary",
                             "&:hover": {
-                                background: "rgba(255,255,255,0.07)",
-                                color: "#e8edf5",
+                                background: "var(--ae-surface-hover)",
+                                color: "text.primary",
                             },
                         }}
                     >
@@ -307,7 +308,7 @@ export default function MigrationHomePage({ tool, onBack }) {
                             fontFamily: "'Syne', sans-serif",
                             fontSize: "15px",
                             fontWeight: 700,
-                            color: "#fff",
+                            color: "text.primary",
                             letterSpacing: "-0.2px",
                         }}
                     >
@@ -354,7 +355,7 @@ export default function MigrationHomePage({ tool, onBack }) {
                                 fontFamily: "'Syne', sans-serif",
                                 fontSize: { xs: "24px", md: "32px" },
                                 fontWeight: 700,
-                                color: "#fff",
+                                color: "text.primary",
                                 letterSpacing: "-0.6px",
                             }}
                         >
@@ -364,7 +365,7 @@ export default function MigrationHomePage({ tool, onBack }) {
                         <Typography
                             sx={{
                                 fontSize: "14px",
-                                color: "#8fa3c0",
+                                color: "text.secondary",
                                 lineHeight: 1.6,
                                 maxWidth: 520,
                             }}

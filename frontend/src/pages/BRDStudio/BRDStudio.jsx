@@ -111,6 +111,28 @@ export default function BRDStudio({ onBack }) {
     fetchProject();
   }, [fetchProject]);
 
+  // Polling for project status if it's 'generating' (Pipeline running in background)
+  useEffect(() => {
+    if (!projectId || !token || projectData?.status !== "generating") return;
+    
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/brd/projects/${projectId}/status`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const { status } = await res.json();
+          if (status !== "generating") {
+            fetchProject(); // Status changed - refresh full data
+            clearInterval(interval);
+          }
+        }
+      } catch (err) { console.error("Polling failed:", err); }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [projectId, token, projectData?.status, fetchProject]);
+
   // When project is reset (e.g., Stop & Revert), clear local state so UI never shows stale data.
   useEffect(() => {
     if (!projectId) {
@@ -159,25 +181,25 @@ export default function BRDStudio({ onBack }) {
           display: "flex",
           alignItems: "center",
           gap: 2,
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          background: "linear-gradient(180deg, rgba(17,34,64,0.95) 0%, rgba(10,22,40,0.95) 100%)",
+          borderBottom: "1px solid var(--ae-border)",
+          background: "var(--ae-glass)",
           backdropFilter: "blur(12px)",
           flexShrink: 0,
         }}
       >
         <Tooltip title="Back to tools">
-          <IconButton onClick={onBack} sx={{ color: "#8fa3c0" }}>
+          <IconButton onClick={onBack} sx={{ color: "text.secondary" }}>
             <ArrowBackIcon />
           </IconButton>
         </Tooltip>
         <Box>
           <Typography
             variant="h6"
-            sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "#e8edf5", fontSize: 18 }}
+            sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "text.primary", fontSize: 18 }}
           >
             BRD Studio
           </Typography>
-          <Typography variant="caption" sx={{ color: "#8fa3c0", fontSize: 11 }}>
+          <Typography variant="caption" sx={{ color: "text.secondary", fontSize: 11 }}>
             {projectData?.name || "Select or create a project"}
           </Typography>
         </Box>
@@ -196,16 +218,24 @@ export default function BRDStudio({ onBack }) {
                   <AEStepIcon {...props} stepIcon={step.icon} />
                 )}
                 onClick={() => {
-                  if (step1Busy) return; // block navigation during Step 1 processing
-                  // Allow going back to Step 1 anytime for iterative updates
-                  if (idx <= activeStep || (idx === 0 && projectId)) {
-                    setActiveStep(idx);
-                  }
+                  if (step1Busy) return;
+                  const canReach = 
+                    idx <= activeStep || 
+                    (idx === 1 && projectId) || 
+                    (idx === 2 && sections.length > 0) ||
+                    (idx === 3 && sections.length > 0);
+
+                  if (canReach) setActiveStep(idx);
                 }}
                 sx={{
-                  cursor: (idx <= activeStep || (idx === 0 && projectId)) ? "pointer" : "default",
+                  cursor: (
+                    idx <= activeStep || 
+                    (idx === 1 && projectId) || 
+                    (idx === 2 && sections.length > 0) ||
+                    (idx === 3 && sections.length > 0)
+                  ) ? "pointer" : "default",
                   "& .MuiStepLabel-label": {
-                    color: idx === activeStep ? "#F26522" : idx < activeStep ? "#e8edf5" : "#8fa3c0",
+                    color: idx === activeStep ? "#F26522" : idx < activeStep ? "text.primary" : "text.secondary",
                     fontSize: 12,
                     fontWeight: idx === activeStep ? 700 : 500,
                     transition: "all 0.2s",
@@ -264,6 +294,8 @@ export default function BRDStudio({ onBack }) {
               onBack={handleBack}
               token={token}
               apiBase={API_BASE}
+              sections={sections}
+              refreshSections={fetchProject}
             />
           )}
           {activeStep === 2 && (
@@ -277,6 +309,7 @@ export default function BRDStudio({ onBack }) {
               token={token}
               apiBase={API_BASE}
               projectData={projectData}
+              refreshProject={fetchProject}
             />
           )}
           {activeStep === 3 && (

@@ -41,12 +41,12 @@ import { useAuth } from "../../context/AuthContext";
 
 /* ─── Styled Components ─── */
 const GlassPaper = styled(Paper)(({ theme }) => ({
-  background: "rgba(17, 34, 64, 0.6)",
+  background: "var(--ae-glass)",
   backdropFilter: "blur(12px)",
-  border: "1px solid rgba(255, 255, 255, 0.08)",
+  border: "1px solid var(--ae-border)",
   borderRadius: "16px",
   padding: "24px",
-  color: "#fff",
+  color: "inherit",
 }));
 
 const ActionButton = styled(Button)(({ theme }) => ({
@@ -62,8 +62,8 @@ const ActionButton = styled(Button)(({ theme }) => ({
 }));
 
 const MetricCard = styled(Box)(({ theme }) => ({
-  background: "rgba(255, 255, 255, 0.03)",
-  border: "1px solid rgba(255, 255, 255, 0.06)",
+  background: "var(--ae-surface)",
+  border: "1px solid var(--ae-border)",
   borderRadius: "12px",
   padding: "16px",
   display: "flex",
@@ -258,13 +258,13 @@ export default function ProposalAssistant({ onBack }) {
   };
 
   return (
-    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", bgcolor: "#0a1628", color: "#fff" }}>
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column", bgcolor: "background.default", color: "text.primary" }}>
       {/* Header */}
-      <Box sx={{ px: 4, py: 2, borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 2 }}>
-        <IconButton onClick={onBack} size="small" sx={{ color: "#8fa3c0" }}><ArrowBackIcon /></IconButton>
-        <Typography variant="h6" sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700 }}>Proposal Assistant</Typography>
+      <Box sx={{ px: 4, py: 2, borderBottom: "1px solid var(--ae-border)", display: "flex", alignItems: "center", gap: 2 }}>
+        <IconButton onClick={onBack} size="small" sx={{ color: "text.secondary" }}><ArrowBackIcon /></IconButton>
+        <Typography variant="h6" sx={{ fontFamily: "'Syne', sans-serif", fontWeight: 700, color: "text.primary" }}>Proposal Assistant</Typography>
         <Box sx={{ flex: 1 }} />
-        <Stepper activeStep={activeStep} sx={{ width: "400px", "& .MuiStepLabel-label": { color: "rgba(255,255,255,0.5)", fontSize: "12px" }, "& .MuiStepLabel-active": { color: "#F26522 !important" } }}>
+        <Stepper activeStep={activeStep} sx={{ width: "400px", "& .MuiStepLabel-label": { color: "text.secondary", fontSize: "12px" }, "& .MuiStepLabel-active": { color: "#F26522 !important" } }}>
           {STEPS.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
         </Stepper>
       </Box>
@@ -276,8 +276,8 @@ export default function ProposalAssistant({ onBack }) {
 
       {/* Footer Actions */}
       {activeStep > 0 && activeStep < 3 && (
-        <Box sx={{ px: 4, py: 2, borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", background: "rgba(10,22,40,0.8)" }}>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => setActiveStep(s => s - 1)} sx={{ color: "#8fa3c0" }}>Back</Button>
+        <Box sx={{ px: 4, py: 2, borderTop: "1px solid var(--ae-border)", display: "flex", justifyContent: "space-between", background: "var(--ae-glass)", backdropFilter: "blur(12px)" }}>
+          <Button startIcon={<ArrowBackIcon />} onClick={() => setActiveStep(s => s - 1)} sx={{ color: "text.secondary" }}>Back</Button>
           <ActionButton 
             variant="contained" 
             endIcon={activeStep === 2 ? (generating ? <CircularProgress size={16} /> : <CheckCircleIcon />) : <ArrowForwardIcon />}
@@ -301,7 +301,7 @@ function UploadStep({ onUpload, isUploading, error }) {
       <GlassPaper sx={{ maxWidth: 600, width: "100%", textAlign: "center", py: 8 }}>
         <CloudUploadIcon sx={{ fontSize: 64, color: "#F26522", mb: 2 }} />
         <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>Upload Discovery Sizing</Typography>
-        <Typography variant="body2" sx={{ color: "#8fa3c0", mb: 4 }}>
+        <Typography variant="body2" sx={{ color: "text.secondary", mb: 4 }}>
           Upload the project discovery Excel sheet (.xlsx). <br/>
           We'll use Vertex AI to automatically size complexity and effort.
         </Typography>
@@ -338,8 +338,8 @@ function ValidationStep({ useCases, setUseCases, activeTab, setActiveTab, totals
         <Grid item xs={3}><MetricCard><Typography sx={{ fontSize: 11, color: "#8fa3c0" }}>AI PLUGINS</Typography><Typography variant="h4" sx={{ fontWeight: 700 }}>{totals.aiPlugins}</Typography></MetricCard></Grid>
       </Grid>
 
-      <Box sx={{ borderBottom: 1, borderColor: "rgba(255,255,255,0.08)", mb: 3 }}>
-        <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)} sx={{ "& .MuiTab-root": { color: "#8fa3c0", textTransform: "none", minWidth: 120 } }}>
+      <Box sx={{ borderBottom: 1, borderColor: "var(--ae-border)", mb: 3 }}>
+        <Tabs value={activeTab} onChange={(e, v) => setActiveTab(v)} sx={{ "& .MuiTab-root": { color: "text.secondary", textTransform: "none", minWidth: 120 } }}>
           <Tab icon={<DashboardIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Use Cases" />
           <Tab icon={<AssessmentIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Software Metrics" />
           <Tab icon={<StorageIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Hardware Sizing" />
@@ -349,15 +349,15 @@ function ValidationStep({ useCases, setUseCases, activeTab, setActiveTab, totals
       {activeTab === 0 && (
         <TableContainer component={GlassPaper} sx={{ p: 0 }}>
           <Table size="small">
-            <TableHead sx={{ bgcolor: "rgba(31, 56, 100, 0.8)" }}>
+            <TableHead sx={{ bgcolor: "var(--ae-glass)" }}>
               <TableRow>
-                <TableCell sx={{ color: "#fff", fontWeight: 700, width: 50 }}>#</TableCell>
-                <TableCell sx={{ color: "#fff", fontWeight: 700 }}>Process Name</TableCell>
-                <TableCell sx={{ color: "#fff", fontWeight: 700 }}>Daily Vol</TableCell>
-                <TableCell sx={{ color: "#fff", fontWeight: 700 }}>Complexity</TableCell>
-                <TableCell sx={{ color: "#fff", fontWeight: 700 }}>Efforts</TableCell>
-                <TableCell sx={{ color: "#fff", fontWeight: 700 }}>Solution Mapping</TableCell>
-                <TableCell sx={{ color: "#fff", fontWeight: 700, width: 80 }}>Plugins</TableCell>
+                <TableCell sx={{ color: "text.primary", fontWeight: 700, width: 50 }}>#</TableCell>
+                <TableCell sx={{ color: "text.primary", fontWeight: 700 }}>Process Name</TableCell>
+                <TableCell sx={{ color: "text.primary", fontWeight: 700 }}>Daily Vol</TableCell>
+                <TableCell sx={{ color: "text.primary", fontWeight: 700 }}>Complexity</TableCell>
+                <TableCell sx={{ color: "text.primary", fontWeight: 700 }}>Efforts</TableCell>
+                <TableCell sx={{ color: "text.primary", fontWeight: 700 }}>Solution Mapping</TableCell>
+                <TableCell sx={{ color: "text.primary", fontWeight: 700, width: 80 }}>Plugins</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -370,7 +370,7 @@ function ValidationStep({ useCases, setUseCases, activeTab, setActiveTab, totals
                       size="small" variant="standard" type="number" 
                       value={uc.daily_volume} 
                       onChange={(e) => handleInputChange(uc.sr_no, "daily_volume", e.target.value)}
-                      sx={{ input: { color: "#fff", fontSize: 13, textAlign: "center", width: 60 } }} 
+                      sx={{ input: { color: "text.primary", fontSize: 13, textAlign: "center", width: 60 } }} 
                     />
                   </TableCell>
                   <TableCell>
@@ -395,7 +395,7 @@ function ValidationStep({ useCases, setUseCases, activeTab, setActiveTab, totals
                       size="small" variant="standard" type="number" 
                       value={uc.ps_efforts} 
                       onChange={(e) => handleInputChange(uc.sr_no, "ps_efforts", e.target.value)}
-                      sx={{ input: { color: "#fff", fontSize: 13, textAlign: "center", width: 40 } }} 
+                      sx={{ input: { color: "text.primary", fontSize: 13, textAlign: "center", width: 40 } }} 
                     />
                   </TableCell>
                   <TableCell>
@@ -403,7 +403,7 @@ function ValidationStep({ useCases, setUseCases, activeTab, setActiveTab, totals
                       size="small" variant="standard" fullWidth
                       value={uc.solution_mapping} 
                       onChange={(e) => handleInputChange(uc.sr_no, "solution_mapping", e.target.value)}
-                      sx={{ input: { color: "#8fa3c0", fontSize: 12 } }} 
+                      sx={{ input: { color: "text.secondary", fontSize: 12 } }} 
                     />
                   </TableCell>
                   <TableCell>
@@ -500,12 +500,12 @@ function ValidationStep({ useCases, setUseCases, activeTab, setActiveTab, totals
           <Grid item xs={12} md={5}>
             <GlassPaper sx={{ bgcolor: "rgba(242,101,34,0.03)", borderColor: "rgba(242,101,34,0.15)" }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#F26522", mb: 1.5 }}>RAM Logic Proof</Typography>
-              <Box sx={{ fontSize: 12, color: "#8fa3c0", display: "flex", flexDirection: "column", gap: 1 }}>
+              <Box sx={{ fontSize: 12, color: "text.secondary", display: "flex", flexDirection: "column", gap: 1 }}>
                 <Box sx={{ display: "flex", justifyContent: "space-between" }}><span>BOT RAM ({configs.totalBots} bots × 4GB)</span><span>{configs.totalBots * 4} GB</span></Box>
                 <Box sx={{ display: "flex", justifyContent: "space-between" }}><span>OS Overhead</span><span>5 GB</span></Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", color: "#e8edf5" }}><span>With 36% Spare</span><span>{hwMetrics.withSpare.toFixed(1)} GB</span></Box>
+                <Box sx={{ display: "flex", justifyContent: "space-between", color: "text.primary" }}><span>With 36% Spare</span><span>{hwMetrics.withSpare.toFixed(1)} GB</span></Box>
                 <Box sx={{ display: "flex", justifyContent: "space-between" }}><span>Core-to-RAM Ratio (1:6)</span><span>{hwMetrics.coreRam} GB</span></Box>
-                <Divider sx={{ my: 0.5, borderColor: "rgba(242,101,34,0.2)" }} />
+                <Divider sx={{ my: 0.5, borderColor: "var(--ae-border)" }} />
                 <Box sx={{ display: "flex", justifyContent: "space-between", color: "#F26522", fontWeight: 700, fontSize: 13 }}><span>Final Standard Rounded</span><span>{hwMetrics.finalRam} GB</span></Box>
               </Box>
             </GlassPaper>

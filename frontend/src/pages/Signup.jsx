@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import { Box, Typography, TextField, Button, CircularProgress, Container, Paper, Link, Select, MenuItem, FormControl, InputLabel } from "@mui/material";
 import axios from "axios";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
+import { useThemeMode } from "../context/ThemeContext";
 
 const AUTH_BASE_URL = "/api/auth";
 
 export default function Signup() {
+  const { mode } = useThemeMode();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [roles, setRoles] = useState(["ba"]);
@@ -41,7 +43,9 @@ export default function Signup() {
         width: "100vw",
         alignItems: "center",
         justifyContent: "center",
-        background: "radial-gradient(ellipse 80% 60% at 15% 10%, rgba(242,101,34,0.06) 0%, transparent 60%), #0a1628",
+        background: mode === 'light'
+          ? "radial-gradient(ellipse 80% 60% at 15% 10%, rgba(242,101,34,0.04) 0%, transparent 60%), #f8fafc"
+          : "radial-gradient(ellipse 80% 60% at 15% 10%, rgba(242,101,34,0.06) 0%, transparent 60%), #0a1628",
       }}
     >
       <Container maxWidth="xs">
@@ -52,9 +56,10 @@ export default function Signup() {
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            background: "#112240",
+            background: "background.paper",
             borderRadius: 3,
             borderTop: "4px solid #F26522",
+            border: "1px solid var(--ae-border)",
           }}
         >
           <Typography variant="h4" sx={{ mb: 1, fontWeight: "bold", color: "#F26522" }}>
@@ -89,7 +94,7 @@ export default function Signup() {
               variant="outlined"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              sx={{ input: { color: "white" } }}
+              sx={{ input: { color: "text.primary" } }}
             />
             <TextField
               margin="normal"
@@ -103,7 +108,7 @@ export default function Signup() {
               variant="outlined"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              sx={{ input: { color: "white" } }}
+              sx={{ input: { color: "text.primary" } }}
             />
 
             <FormControl fullWidth margin="normal" required>
@@ -116,8 +121,8 @@ export default function Signup() {
                 label="Select Role(s)"
                 onChange={(e) => setRoles(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
                 sx={{ 
-                  color: "white", 
-                  ".MuiOutlinedInput-notchedOutline": { borderColor: "rgba(255,255,255,0.23)" },
+                  color: "text.primary", 
+                  ".MuiOutlinedInput-notchedOutline": { borderColor: "var(--ae-border)" },
                   "&.Mui-focused .MuiOutlinedInput-notchedOutline": { borderColor: "#F26522" }
                 }}
               >
