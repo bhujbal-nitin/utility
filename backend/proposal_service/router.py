@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from core.deps import RequireRole
 from auth_service.models import RoleEnum

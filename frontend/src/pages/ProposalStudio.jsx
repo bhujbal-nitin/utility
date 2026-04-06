@@ -140,9 +140,9 @@ export default function ProposalStudio({ onBack }) {
         {
           discovery_file: discoveryFile,
           use_cases: useCases,
-          work_days: softParams.workDays,
-          total_bots: softParams.totalBots,
-          cycle_time: botMetrics.avgExecTime,
+          work_days: parseInt(softParams.workDays) || 1,
+          total_bots: parseInt(softParams.totalBots) || 18,
+          cycle_time: parseFloat(botMetrics.avgExecTime) || 5.0,
           hw_data: hwData,
           sys_hours: parseFloat(softParams.sysHours) || 16,
         },
@@ -153,25 +153,28 @@ export default function ProposalStudio({ onBack }) {
       setStep(STEPS.SUCCESS);
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.detail || "Error generating proposal document.");
+      const detail = err.response?.data?.detail;
+      const msg = Array.isArray(detail)
+        ? detail.map(e => `${e.loc?.slice(-1)[0]}: ${e.msg}`).join('\n')
+        : (typeof detail === 'string' ? detail : "Error generating proposal document.");
+      alert(msg);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleDownload = async (url, filename) => {
+  const handleDownload = (url) => {
     try {
-      const response = await axios.get(url, {
-        headers: authHeaders,
-        responseType: "blob",
-      });
-      const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.setAttribute("download", filename);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      // Direct browser download bypasses async CORS pre-flight and blob memory limits
+      let downloadLink = url;
+      if (url.startsWith('/api/') && window.location.hostname === 'localhost') {
+        downloadLink = `http://localhost:8002${url}`;
+      }
+      
+      // Direct browser navigation will seamlessly trigger the download
+      // without opening a new tab or falling prey to pop-up blockers, 
+      // because the backend sends Content-Disposition: attachment
+      window.location.href = downloadLink;
     } catch (err) {
       console.error("Download failed:", err);
       alert("Error downloading the document.");
@@ -187,7 +190,15 @@ export default function ProposalStudio({ onBack }) {
         "/api/proposal/generate-word",
         {
           use_cases: useCases,
-          client_info: clientInfo,
+          client_info: {
+            client_name: clientInfo.clientName,
+            proposal_date: clientInfo.proposalDate,
+            contact_name: clientInfo.contactName,
+            contact_title: clientInfo.contactTitle,
+            contact_address: clientInfo.contactAddress,
+            contact_email: clientInfo.contactEmail,
+            contact_mobile: clientInfo.contactMobile
+          },
           software: {
             num_bots: softParams.totalBots,
             idp_pages: totalDocs.toLocaleString("en-IN"),
@@ -223,13 +234,18 @@ export default function ProposalStudio({ onBack }) {
       setStep(STEPS.SUCCESS);
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.detail || "Error generating Word proposal.");
+      const detail = err.response?.data?.detail;
+      const msg = Array.isArray(detail)
+        ? detail.map(e => `${e.loc?.slice(-1)[0]}: ${e.msg}`).join('\n')
+        : (typeof detail === 'string' ? detail : "Error generating Word proposal.");
+      alert(msg);
     } finally {
       setIsGenerating(false);
     }
   };
 
   const updateClientInfo = (field, value) => {
+    console.log(`Updating clientInfo field ${field} to:`, value);
     setClientInfo({ ...clientInfo, [field]: value });
   };
 

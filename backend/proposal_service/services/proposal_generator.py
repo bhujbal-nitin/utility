@@ -104,51 +104,34 @@ def generate_proposal_docx(
 ) -> str:
     """
     Build a proposal .docx file from use_cases + client_info.
+    Uses STDIN for payload passing (no temporary JSON files).
     """
     node_exe = _find_node()
 
-    # Make sure 'docx' npm package is resolvable – install locally if needed
+    # Make sure packages are resolvable (if required)
     nm = _find_node_modules()
-    if nm is None:
-        logger.info("'docx' package not found; running npm install in services/")
-        services_dir = os.path.dirname(_SCRIPT)
-        
-        npm_exe = "npm.cmd" if os.name == "nt" else "npm"
-        npm = shutil.which(npm_exe) or os.path.join(os.path.dirname(node_exe), npm_exe)
-
-        subprocess.run(
-            [npm, "install", "docx"],
-            cwd=services_dir,
-            check=True,
-            timeout=120,
-            shell=(os.name == "nt")
-        )
-
+    
     data = {
-        **client_info,
+        "client_info": client_info,
         "use_cases": use_cases,
         "software":  software or {},
         "hardware":  hardware or {},
     }
-
-    tmp_json = output_path.replace(".docx", "_data.json")
+    
+    tmp_json = output_path.replace(".docx", "_payload.json")
+    
     with open(tmp_json, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+        json.dump(data, f, ensure_ascii=False)
 
-    cmd = [
-        node_exe, _SCRIPT,
-        "--data",   tmp_json,
-        "--out",    output_path,
-        "--images", _IMG_DIR,
-    ]
+    # Pass the output path as arg 1, temp JSON path as arg 2
+    cmd = [node_exe, _SCRIPT, output_path, tmp_json]
 
-    # On Windows, set NODE_PATH so require('docx') resolves from global modules
     env = os.environ.copy()
     if nm:
         existing = env.get("NODE_PATH", "")
         env["NODE_PATH"] = nm + (os.pathsep + existing if existing else "")
 
-    logger.info("Running node: %s", node_exe)
+    logger.info("Running node: %s %s %s", node_exe, _SCRIPT, tmp_json)
 
     try:
         result = subprocess.run(
@@ -159,10 +142,12 @@ def generate_proposal_docx(
             shell=False,
             env=env,
         )
+        
         if result.returncode != 0:
             err = (result.stderr or result.stdout or "Node script failed with no output").strip()
             logger.error("generate_proposal.js error:\n%s", err)
             raise RuntimeError(err)
+
         logger.info("Proposal generated: %s", output_path)
     finally:
         try:

@@ -1,0 +1,115 @@
+{
+  "client_name": "",
+  "proposal_date": "",
+  "contact_name": "",
+  "contact_title": "",
+  "contact_address": "",
+  "contact_email": "",
+  "contact_mobile": "",
+  "use_cases": [
+    {
+      "sr_no": 1,
+      "process_name": "Invoicing Process",
+      "sme": "Irfan Ahmed Abdul Rashid Shaikh",
+      "apps": "Oracle Cloud",
+      "user_profile": "Maker \nApprovers",
+      "num_users": "15 - Maker\n13-15 - Approvers",
+      "frequency": "Daily (Including Weekends)",
+      "process_time": "15-2 Hours",
+      "work_hours": "15-2 Hours  per case depending on complexity",
+      "idp": "Yes",
+      "docs_annually": 60000,
+      "estimated_exec_time": 0,
+      "raw_volume": "3000-5000 Invoices Monthly",
+      "daily_volume": 133,
+      "tat": "7 Days TAT for Maker",
+      "nature": "UI Reading & Writing\nData Massaging\nDB Access",
+      "trigger": "Email",
+      "input_files": "1. Invoice PDF \u2013 always present.\n2. Supporting Documents \u2013 optional (can be multiple, in PDF or Excel format).\n3. PRF Excel File \u2013 contains details for Oracle entry (usually present).\n4. Approver Master file/Email Body \u2013 treated as input since it may contain approver details. \u2013 treated as input since it may contain approver details.",
+      "input_type": "PDF\nExcel",
+      "ocr_nlp": "OCR",
+      "input_desc": "NA",
+      "output_files": "NA",
+      "output_type": "NA",
+      "output_desc": "NA",
+      "pain_areas": "1. Time Consuming \n2.  Repetitive Work\n3. Manual Errors",
+      "summary": "1.\tEmail Monitoring and File Download:\n- Monitor a specific email ID where all invoice-related documents are received.\n- Email contains:\n  - PDF copy of the invoice.\n  - Supporting documents (Excel/PDF) from an internal team \u2013 these vary and are not standardized.\n  - An Excel file named PRF, containing invoice details required for Oracle input.\n- BOT downloads all attachments.\n- For invoices up to \u20b91,00,000: Either Agreement or Purchase Order (PO) is mandatory.\n- For invoices upto 5 lakh: Both Agreement and PO are required.\n- For invoices above \u20b95,00,000: Must go through Approval Matrix validation, with all necessary approval trail and authorization documents attached.\n2.\tData Extraction:\n- Extract required fields from the invoice PDF and supporting Excel files.\n- Each vendor (approx. 3000 vendors) has a different invoice template \u2013 no standard format or file naming convention is followed.\n- The first step is to verify whether the invoice is addressed to Unity Bank, as at times, invoices meant for other entities are mistakenly shared with Unity.\n- Extract essential fields like: Invoice No., Supplier Name, Bank Details, Amount, GST, Invoice Date, etc.\n3.\tOracle Cloud Login:\n- BOT logs into Oracle Cloud using provided username and password.\n- The session automatically times out after every 8 hours, requiring the user to log in again.\n- An OTP received via email is required once every 24 hours.\n- For the rest of the day, login can be done using only the User ID and Password.\n4.\tInvoice Duplication Check:\n- Search using Invoice No.\n- If \"Result Not Found\" appears, proceed with invoice upload.\n- If an existing entry is found, skip the invoice and move to the next one.\n5.\tInvoice Upload \u2013 General Tab:\n- Click Create to initiate new invoice entry.\n- Enter Supplier Name.\n- Select appropriate Supplier Site Location from dropdown.\n- The layout auto-fills supplier-related details \u2014 cross-verify with invoice-extracted data.\n6.\tBank Details Verification:\n- If bank details are available on the invoice, cross-check with the supplier layout.\n- Validate Account No., IFSC, etc.\n7.\tInvoice Classification and Entry:\n- Select Invoice Type (e.g., Tax Invoice, IRN).\n- In the Description tab, enter a comment like: \"Payment towards advertising expense.\"\n  (Note: This varies based on service type.)\n- In Payment Terms, always select Immediate from the dropdown.\n- Enter Invoice Date from the PDF.\n8.\tAttachment Upload:\n- Click the Attachment icon and upload:\n  - Invoice PDF.\n  - All supporting documents received in the email.\n  - The email body itself.\n9.\tAccounting Tab:\n- Enter the GST Number of the supplier.\n10.\tAdditional Information Tab:\n- Enter the Requester\u2019s Email ID (i.e., the internal team member who shared the invoice).\n11.\tApprover Details Handling:\n- Approver name is usually available in the Excel file named PR Google Ads or similar (this may vary by vendor).\n- If not available in the Excel, extract the approver name from the email body.\n- Use the Master Approver List to identify the Department Name based on the Approver\u2019s name.\n12.\tGeneral Tab \u2013 Line Level Entry:\n- Click on Line Level section.\n- Enter the Base Amount.\n- In Distribution Combination, input segments like:\n  - Entity\n  - Location Code\n  - GST details\n  - Any other allocation details as per invoice.\n13.\tTax Calculation and Validation:\n- Click the Refresh icon to auto-calculate tax.\n- If the Total section shows a Green Tick, all allocations are correct.\n- If an Exclamation Mark appears, it indicates an issue in allocation.\n14.\tSave Invoice:\n- Click Save on the right side.\n- A confirmation Pop-up will appear confirming the invoice is saved.",
+      "remarks": "",
+      "complexity": "Complex",
+      "ps_efforts": 95,
+      "solution_mapping": "Email listener, IDP for PDF invoices, OCR, Robotic Process Automation, Oracle Cloud integration",
+      "ai_plugins": 2
+    }
+  ],
+  "software": {
+    "num_bots": 1,
+    "idp_pages": "60,000",
+    "num_plugins": 2
+  },
+  "hardware": {
+    "production": {
+      "servers": [
+        [
+          1,
+          "AutomationEdge Application Server\n(Main Server incl. Active MQ, PostgreSQL DB, DocEdge)",
+          "VM",
+          1,
+          4,
+          24,
+          "500",
+          "MS Windows Server 2022/2023 \u2013 64 bit",
+          "PostgreSQL (Default)",
+          "Apache Tomcat"
+        ],
+        [
+          1,
+          "AutomationEdge Processing Server\n(incl. IDP Processing Agents & Robot Sessions)",
+          "VM",
+          1,
+          4,
+          16,
+          "500",
+          "MS Windows Server 2022/2023 \u2013 64 bit",
+          "-",
+          "-"
+        ]
+      ]
+    },
+    "uat": {
+      "servers": [
+        [
+          1,
+          "AE Main Server, DocEdge Server, Active MQ, PostgreSQL DB & Processing Server",
+          "VM",
+          1,
+          4,
+          16,
+          "500",
+          "MS Windows Server 2022/2023 \u2013 64 bit",
+          "PostgreSQL (Default)",
+          "Apache Tomcat"
+        ]
+      ]
+    },
+    "development": {
+      "servers": [
+        [
+          4,
+          "Desktop Development Machine for Chatbot / Script Development",
+          "Desktop / VM",
+          1,
+          4,
+          8,
+          "500",
+          "Windows 7 Professional \u2013 64 bit",
+          "PostgreSQL (Default)",
+          "NA"
+        ]
+      ]
+    },
+    "processing_server": {
+      "ram": 16,
+      "core": 4
+    }
+  }
+}
